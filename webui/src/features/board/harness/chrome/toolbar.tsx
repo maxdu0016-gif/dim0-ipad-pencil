@@ -13,6 +13,7 @@ import {
   HandPanIcon,
   LayerStackIcon,
   ListViewIcon,
+  LoaderRefreshIcon,
   NotepadIcon,
   PencilEditIcon,
   PresentationIcon,
@@ -38,7 +39,8 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip"
 import { cn } from "@/lib/utils"
-import { isWebKitWebview } from "@/platform"
+import { isIOSNative, isWebKitWebview } from "@/platform"
+import { requestNativePencilSync } from "@/features/ios/native-pencil-bridge"
 import { useBoardAppStore } from "../store/board-app-store"
 import { HarnessToolbarMore } from "./toolbar-more"
 
@@ -418,6 +420,22 @@ export function HarnessToolbar({ local = false }: { local?: boolean } = {}) {
         </TooltipTrigger>
         <TooltipContent side="bottom" sideOffset={10}>Eraser</TooltipContent>
       </Tooltip>
+
+      {isIOSNative() && (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              type="button"
+              onClick={requestNativePencilSync}
+              aria-label="Sync handwriting"
+              className={inactiveClass}
+            >
+              <LoaderRefreshIcon className="size-4 shrink-0" />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom" sideOffset={10}>同步手写</TooltipContent>
+        </Tooltip>
+      )}
 
       <Separator orientation="vertical" className="hidden md:!h-6 md:block" />
 

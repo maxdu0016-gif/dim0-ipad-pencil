@@ -32,14 +32,8 @@ enum PencilStrokeExporter {
         guard !points.isEmpty else { return nil }
         let tool: NativeInkStroke.Tool = stroke.ink.inkType == .marker ? .highlighter : .pen
         let color = colorComponents(stroke.ink.color)
-        let width = representativeWidth(path: path, tool: tool)
-        let id = fingerprint(
-            stroke: stroke,
-            tool: tool,
-            color: color.hex,
-            width: width,
-            points: points
-        )
+        let width = representativeWidth(path: path, tool: tool, transform: stroke.transform)
+        let id = stableId(for: stroke)
 
         return NativeInkStroke(
             id: id,
@@ -49,6 +43,12 @@ enum PencilStrokeExporter {
             opacity: tool == .highlighter ? min(color.alpha, 0.4) : color.alpha,
             points: points
         )
+    }
+
+    /// Identifies a PencilKit stroke without sampling its path or depending on viewport transforms.
+    static func stableId(for stroke: PKStroke) -> String {
+        let tool: NativeInkStroke.Tool = stroke.ink.inkType == .marker ? .highlighter : .pen
+        return fingerprint(stroke: stroke, tool: tool, color: colorComponents(stroke.ink.color).hex)
     }
 
     /// Projects one PencilKit sample into the caller's local coordinate space.
@@ -68,7 +68,8 @@ enum PencilStrokeExporter {
 
     private static func representativeWidth(
         path: PKStrokePath,
-        tool: NativeInkStroke.Tool
+        tool: NativeInkStroke.Tool,
+        transform: CGAffineTransform
     ) -> Double {
         let sizes = (0..<path.count).map { index in
             let size = path[index].size
@@ -76,7 +77,8 @@ enum PencilStrokeExporter {
         }
         let average = sizes.reduce(0, +) / Double(max(1, sizes.count))
         let fallback = tool == .highlighter ? 14.0 : 4.0
-        return max(1, min(32, average.isFinite && average > 0 ? average : fallback))
+        let transformed = average * Double(hypot(transform.a, transform.b))
+        return max(0.5, min(64, transformed.isFinite && transformed > 0 ? transformed : fallback))
     }
 
     private static func colorComponents(_ color: UIColor) -> (hex: String, alpha: Double) {
@@ -102,21 +104,13 @@ enum PencilStrokeExporter {
     private static func fingerprint(
         stroke: PKStroke,
         tool: NativeInkStroke.Tool,
-        color: String,
-        width: Double,
-        points: [NativeInkPoint]
+        color: String
     ) -> String {
         var bytes = Data()
         append(stroke.path.creationDate.timeIntervalSince1970, to: &bytes)
         append(UInt64(stroke.randomSeed), to: &bytes)
         bytes.append(contentsOf: tool.rawValue.utf8)
         bytes.append(contentsOf: color.utf8)
-        append(width, to: &bytes)
-        for point in points {
-            append(point.x, to: &bytes)
-            append(point.y, to: &bytes)
-            append(point.pressure, to: &bytes)
-        }
         return SHA256.hash(data: bytes).map { String(format: "%02x", $0) }.joined()
     }
 

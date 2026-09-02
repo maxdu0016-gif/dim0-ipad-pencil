@@ -1,66 +1,55 @@
 import { describe, expect, it } from "vitest"
 import { readInkProperty } from "@/features/board/harness/ink/ink-geometry"
 import { createBoardStore } from "@/features/board/harness/store/create-board-store"
-import { applyNativePencilStroke } from "./apply-native-pencil-stroke"
-import type { NativePencilStroke } from "./native-pencil-bridge"
+import { applyNativePencilSnapshot } from "./apply-native-pencil-stroke"
+import type { NativePencilSnapshot } from "./native-pencil-bridge"
 
 
-const message = (): NativePencilStroke => ({
-  kind: "dim0.native-pencil.stroke",
+const snapshot = (...ids: string[]): NativePencilSnapshot => ({
+  kind: "dim0.native-pencil.snapshot",
   version: 1,
   sessionId: "ad7dbd1d-7235-49c9-854f-c00613504eae",
   contextId: "board:",
-  stroke: {
-    id: "a".repeat(64),
+  camera: { x: 100, y: 50, zoom: 2 },
+  strokes: ids.map((id, index) => ({
+    id: id.repeat(64),
     tool: "pen",
     color: "#1F1F24",
     width: 8,
     opacity: 1,
     points: [
-      { x: 120, y: 70, pressure: 0.4 },
-      { x: 140, y: 90, pressure: 0.7 },
+      { x: 120 + index, y: 70, pressure: 0.4 },
+      { x: 140 + index, y: 90, pressure: 0.7 },
     ],
-  },
+  })),
 })
 
 
-describe("applyNativePencilStroke", () => {
-  it("converts screen coordinates and adds one formal ink node", () => {
+describe("applyNativePencilSnapshot", () => {
+  it("converts the full screen-space snapshot in one batch", () => {
     const store = createBoardStore()
     store.setCamera({ x: 100, y: 50, z: 2 })
+    const operationTypes: string[] = []
+    store.subscribe("change", (batch) => operationTypes.push(...batch.ops.map((op) => op.type)))
 
-    const result = applyNativePencilStroke(store, message(), "board", null)
+    const result = applyNativePencilSnapshot(store, snapshot("a", "b"), "board", null)
 
-    expect(result.handled).toBe(true)
-    expect(result.added).toBe(true)
+    expect(result).toEqual({ handled: true, added: 2, removed: 0, total: 2 })
+    expect(operationTypes.filter((type) => type === "node.add")).toHaveLength(2)
     const node = store.getAllNodes()[0]!
     const ink = readInkProperty(node)!
-    expect(node.type).toBe("ink")
     expect(node.x + ink.points[0]![0]).toBeCloseTo(160)
     expect(node.y + ink.points[0]![1]).toBeCloseTo(85)
     expect(ink.size).toBe(4)
   })
 
-  it("deduplicates a retried native stroke by its deterministic node id", () => {
+  it("reconciles erased local strokes on the next manual sync", () => {
     const store = createBoardStore()
-    const first = applyNativePencilStroke(store, message(), "board", "folder")
-    const repeated = applyNativePencilStroke(store, message(), "board", "folder")
+    applyNativePencilSnapshot(store, snapshot("a", "b"), "board", null)
 
-    expect(first).toEqual({ handled: true, added: true, nodeId: first.nodeId })
-    expect(repeated).toEqual({ handled: true, added: false, nodeId: first.nodeId })
+    const result = applyNativePencilSnapshot(store, snapshot("b"), "board", null)
+
+    expect(result).toEqual({ handled: true, added: 0, removed: 1, total: 1 })
     expect(store.getNodeCount()).toBe(1)
-  })
-
-  it("emits the ordinary local node-add batch consumed by persistence and sync v2", () => {
-    const store = createBoardStore()
-    const operationTypes: string[] = []
-    const unsubscribe = store.subscribe("change", (batch) => {
-      operationTypes.push(...batch.ops.map((operation) => operation.type))
-    })
-
-    applyNativePencilStroke(store, message(), "board", null)
-    unsubscribe()
-
-    expect(operationTypes).toContain("node.add")
   })
 })

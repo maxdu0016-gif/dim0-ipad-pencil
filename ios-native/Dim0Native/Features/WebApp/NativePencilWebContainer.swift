@@ -2,108 +2,164 @@ import PencilKit
 import UIKit
 import WebKit
 
-/// Hosts Dim0's web app and a Pencil-only native drawing layer over the active board.
+/// Hosts Dim0's web app while PencilKit remains the local source of truth for handwriting.
 @MainActor
 final class NativePencilWebContainer: UIView, PKCanvasViewDelegate {
     let webView: PencilAwareWebView
 
     private let pencilCanvas = PencilCanvasView()
+    private let documentStore: NativePencilDocumentStore
     private let sessionId: String
     private var overlayFrame = CGRect.zero
-    private var acknowledgedStrokeIds = Set<String>()
-    private var inFlightStrokeIds = Set<String>()
-    private var pendingStrokes: [String: NativeCompletedInkStroke]
-    private var isUsingTool = false
-    private var lastDoubleTapAt = Date.distantPast
     private var contextId = ""
     private var storedColor = "#1F1F24"
+    private var strokeColors: [String: String] = [:]
+    private var isErasing = false
+    private var currentCamera = NativePencilCamera(x: 0, y: 0, zoom: 1)
+    private var pendingCamera: NativePencilCamera?
+    private var pendingSave: Task<Void, Never>?
+    private var loadGeneration = 0
+    private var requestedEnabled = false
+    private var isPageAvailable = false
+    private var isLoadingDocument = false
+    private var isUsingTool = false
+    private var isProgrammaticChange = false
 
     var onPencilDoubleTap: (() -> Void)?
 
-    init(webView: PencilAwareWebView) {
+    init(
+        webView: PencilAwareWebView,
+        documentStore: NativePencilDocumentStore = NativePencilDocumentStore()
+    ) {
         self.webView = webView
+        self.documentStore = documentStore
         self.sessionId = Self.persistentSessionId()
-        self.pendingStrokes = Self.loadPendingStrokes()
         super.init(frame: .zero)
         configureViews()
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(persistForBackground),
+            name: UIApplication.didEnterBackgroundNotification,
+            object: nil
+        )
     }
 
     required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
     }
 
-    /// Keeps the web application full-screen and positions native ink over its canvas surface only.
+    deinit {
+        NotificationCenter.default.removeObserver(self)
+    }
+
     override func layoutSubviews() {
         super.layoutSubviews()
         webView.frame = bounds
         pencilCanvas.frame = overlayFrame.intersection(bounds)
     }
 
-    /// Applies the web tool state and canvas rectangle without putting networking in the local ink path.
+    /// Updates the native tool and viewport without exporting anything on the writing path.
     func configurePencil(
         enabled: Bool,
         frame: CGRect,
         color: UIColor,
         contextId: String,
         storedColor: String,
-        width: CGFloat
+        width: CGFloat,
+        erasing: Bool,
+        camera: NativePencilCamera
     ) {
         overlayFrame = frame
-        self.contextId = contextId
+        requestedEnabled = enabled
+        isPageAvailable = true
         self.storedColor = storedColor
-        pencilCanvas.tool = PKInkingTool(.pen, color: color, width: width)
-        pencilCanvas.isHidden = !enabled || frame.isEmpty
-        pencilCanvas.isUserInteractionEnabled = enabled && !frame.isEmpty
-        setNeedsLayout()
-
-        if enabled {
-            submitCompletedStrokes()
+        isErasing = erasing
+        if erasing {
+            pencilCanvas.tool = PKEraserTool(.vector)
+        } else {
+            pencilCanvas.tool = PKInkingTool(.pen, color: color, width: width)
         }
-    }
 
-    /// Hides native input while a page navigation replaces the active Dim0 canvas.
-    func disablePencil() {
-        pencilCanvas.isHidden = true
-        pencilCanvas.isUserInteractionEnabled = false
-    }
-
-    /// Defers clearing acknowledged strokes while a newer Pencil gesture is still rendering.
-    func canvasViewDidBeginUsingTool(_ canvasView: PKCanvasView) {
-        isUsingTool = true
-    }
-
-    /// Records the finished stroke before submitting it to the active web canvas.
-    func canvasViewDidEndUsingTool(_ canvasView: PKCanvasView) {
-        isUsingTool = false
-        var addedPendingStroke = false
-        for pencilStroke in canvasView.drawing.strokes {
-            guard let stroke = PencilStrokeExporter.exportStroke(pencilStroke, origin: .zero) else {
-                continue
+        if self.contextId != contextId {
+            switchContext(to: contextId, camera: camera)
+        } else if camera != currentCamera {
+            if isUsingTool {
+                pendingCamera = camera
+            } else {
+                applyCamera(camera)
             }
-            guard pendingStrokes[stroke.id] == nil else { continue }
-            pendingStrokes[stroke.id] = NativeCompletedInkStroke(
-                sessionId: sessionId,
-                contextId: contextId,
-                stroke: NativeInkStroke(
+        }
+
+        updatePencilAvailability()
+        setNeedsLayout()
+    }
+
+    func disablePencil() {
+        requestedEnabled = false
+        isPageAvailable = false
+        updatePencilAvailability()
+    }
+
+    /// Converts the complete drawing only after the explicit Sync button is pressed.
+    func syncNow() {
+        guard !contextId.isEmpty else { return }
+        let strokes = pencilCanvas.drawing.strokes.compactMap { pencilStroke in
+            PencilStrokeExporter.exportStroke(pencilStroke, origin: .zero).map { stroke in
+                NativeInkStroke(
                     id: stroke.id,
                     tool: stroke.tool,
-                    color: storedColor,
+                    color: strokeColors[stroke.id] ?? stroke.color,
                     width: stroke.width,
                     opacity: stroke.opacity,
                     points: stroke.points
                 )
-            )
-            addedPendingStroke = true
+            }
         }
-        if addedPendingStroke { persistPendingStrokes() }
-        removeAcknowledgedStrokes()
-        submitCompletedStrokes()
+        let snapshot = NativePencilInkSnapshot(
+            sessionId: sessionId,
+            contextId: contextId,
+            camera: currentCamera,
+            strokes: strokes
+        )
+        guard let data = try? JSONEncoder().encode(snapshot),
+              let json = String(data: data, encoding: .utf8) else {
+            return
+        }
+
+        let script = """
+        (() => {
+          const detail = \(json);
+          detail.handled = false;
+          window.dispatchEvent(new CustomEvent('dim0:native-pencil-snapshot', { detail }));
+          return detail.handled === true;
+        })();
+        """
+        webView.evaluateJavaScript(script)
     }
 
-    /// Installs the web and native layers while keeping their rendering paths independent.
+    func canvasViewDidBeginUsingTool(_ canvasView: PKCanvasView) {
+        isUsingTool = true
+    }
+
+    func canvasViewDidEndUsingTool(_ canvasView: PKCanvasView) {
+        isUsingTool = false
+        if !isErasing, let stroke = canvasView.drawing.strokes.last {
+            strokeColors[PencilStrokeExporter.stableId(for: stroke)] = storedColor
+        }
+        if let camera = pendingCamera {
+            pendingCamera = nil
+            applyCamera(camera)
+        }
+        scheduleSave()
+    }
+
+    func canvasViewDrawingDidChange(_ canvasView: PKCanvasView) {
+        guard !isProgrammaticChange else { return }
+        scheduleSave()
+    }
+
     private func configureViews() {
         addSubview(webView)
-
         pencilCanvas.delegate = self
         pencilCanvas.backgroundColor = .clear
         pencilCanvas.isOpaque = false
@@ -115,100 +171,99 @@ final class NativePencilWebContainer: UIView, PKCanvasViewDelegate {
         pencilCanvas.isHidden = true
         pencilCanvas.isUserInteractionEnabled = false
         pencilCanvas.onPencilDoubleTap = { [weak self] in
-            self?.forwardPencilDoubleTap()
+            self?.onPencilDoubleTap?()
         }
         addSubview(pencilCanvas)
-
-        webView.onPencilDoubleTap = { [weak self] in
-            self?.forwardPencilDoubleTap()
-        }
     }
 
-    /// Coalesces the two nested Pencil interactions into one shared tool toggle.
-    private func forwardPencilDoubleTap() {
-        let now = Date()
-        guard now.timeIntervalSince(lastDoubleTapAt) > 0.3 else { return }
-        lastDoubleTapAt = now
-        onPencilDoubleTap?()
-    }
+    private func switchContext(to newContextId: String, camera: NativePencilCamera) {
+        persistCurrentDocument()
+        pendingSave?.cancel()
+        loadGeneration += 1
+        let generation = loadGeneration
+        contextId = newContextId
+        currentCamera = camera
+        isLoadingDocument = true
+        isProgrammaticChange = true
+        pencilCanvas.drawing = PKDrawing()
+        isProgrammaticChange = false
+        strokeColors = [:]
+        updatePencilAvailability()
 
-    /// Retries only stroke identifiers recorded by the end-of-tool delegate callback.
-    private func submitCompletedStrokes() {
-        for message in pendingStrokes.values {
-            guard message.contextId == contextId,
-                  !inFlightStrokeIds.contains(message.stroke.id) else {
-                continue
+        Task { [weak self, documentStore] in
+            let document = try? await documentStore.load(contextId: newContextId)
+            guard let self, self.loadGeneration == generation, self.contextId == newContextId else { return }
+            var drawing = document.flatMap { try? PKDrawing(data: $0.drawing) } ?? PKDrawing()
+            if let savedCamera = document?.camera {
+                drawing = drawing.transformed(using: Self.cameraTransform(from: savedCamera, to: self.currentCamera))
             }
-            submit(message)
+            self.isProgrammaticChange = true
+            self.pencilCanvas.drawing = drawing
+            self.isProgrammaticChange = false
+            self.strokeColors = document?.strokeColors ?? [:]
+            self.isLoadingDocument = false
+            self.updatePencilAvailability()
         }
     }
 
-    /// Dispatches one sampled stroke to JavaScript and waits for synchronous store acceptance.
-    private func submit(_ message: NativeCompletedInkStroke) {
-        guard let data = try? JSONEncoder().encode(message),
-              let json = String(data: data, encoding: .utf8) else {
-            return
-        }
+    private func applyCamera(_ camera: NativePencilCamera) {
+        let transform = Self.cameraTransform(from: currentCamera, to: camera)
+        isProgrammaticChange = true
+        pencilCanvas.drawing = pencilCanvas.drawing.transformed(using: transform)
+        isProgrammaticChange = false
+        currentCamera = camera
+        scheduleSave()
+    }
 
-        inFlightStrokeIds.insert(message.stroke.id)
-        let script = """
-        (() => {
-          const detail = \(json);
-          detail.handled = false;
-          window.dispatchEvent(new CustomEvent('dim0:native-pencil-stroke', { detail }));
-          return detail.handled === true;
-        })();
-        """
-        webView.evaluateJavaScript(script) { [weak self] result, _ in
-            Task { @MainActor [weak self] in
-                guard let self else { return }
-                self.inFlightStrokeIds.remove(message.stroke.id)
-                guard result as? Bool == true else { return }
-                self.pendingStrokes.removeValue(forKey: message.stroke.id)
-                self.persistPendingStrokes()
-                self.acknowledgedStrokeIds.insert(message.stroke.id)
-                if !self.isUsingTool {
-                    self.removeAcknowledgedStrokes()
-                }
-            }
+    private static func cameraTransform(
+        from oldCamera: NativePencilCamera,
+        to newCamera: NativePencilCamera
+    ) -> CGAffineTransform {
+        let scale = newCamera.zoom / oldCamera.zoom
+        return CGAffineTransform(
+            a: scale,
+            b: 0,
+            c: 0,
+            d: scale,
+            tx: (oldCamera.x - newCamera.x) * newCamera.zoom,
+            ty: (oldCamera.y - newCamera.y) * newCamera.zoom
+        )
+    }
+
+    private func updatePencilAvailability() {
+        let visible = isPageAvailable && !isLoadingDocument && !overlayFrame.isEmpty
+        pencilCanvas.isHidden = !visible
+        pencilCanvas.isUserInteractionEnabled = visible && requestedEnabled
+    }
+
+    private func scheduleSave() {
+        guard !contextId.isEmpty else { return }
+        pendingSave?.cancel()
+        pendingSave = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(550))
+            guard !Task.isCancelled else { return }
+            self?.persistCurrentDocument()
         }
     }
 
-    /// Removes acknowledged strokes only while no newer Pencil gesture is in progress.
-    private func removeAcknowledgedStrokes() {
-        guard !acknowledgedStrokeIds.isEmpty else { return }
-        let removedIds = acknowledgedStrokeIds
-        acknowledgedStrokeIds.removeAll()
-        let remaining = pencilCanvas.drawing.strokes.filter { stroke in
-            guard let id = PencilStrokeExporter.exportStroke(stroke, origin: .zero)?.id else {
-                return true
-            }
-            return !removedIds.contains(id)
-        }
-        pencilCanvas.drawing = PKDrawing(strokes: remaining)
-    }
-
-    /// Persists the small failure outbox so an app restart cannot discard completed Pencil input.
-    private func persistPendingStrokes() {
-        // ponytail: UserDefaults is enough for the normally empty queue; move to a file if offline drawing is added.
-        let messages = pendingStrokes.values.sorted { $0.stroke.id < $1.stroke.id }
-        if messages.isEmpty {
-            UserDefaults.standard.removeObject(forKey: Self.pendingStrokesKey)
-        } else if let data = try? JSONEncoder().encode(messages) {
-            UserDefaults.standard.set(data, forKey: Self.pendingStrokesKey)
+    private func persistCurrentDocument() {
+        guard !contextId.isEmpty, !isLoadingDocument else { return }
+        let savedContextId = contextId
+        let document = NativePencilDocument(
+            drawing: pencilCanvas.drawing.dataRepresentation(),
+            camera: currentCamera,
+            strokeColors: strokeColors
+        )
+        Task { [documentStore] in
+            try? await documentStore.save(document, contextId: savedContextId)
         }
     }
 
-    /// Restores strokes that were not acknowledged before the previous process exited.
-    private static func loadPendingStrokes() -> [String: NativeCompletedInkStroke] {
-        guard let data = UserDefaults.standard.data(forKey: pendingStrokesKey),
-              let messages = try? JSONDecoder().decode([NativeCompletedInkStroke].self, from: data) else {
-            return [:]
-        }
-        return Dictionary(uniqueKeysWithValues: messages.map { ($0.stroke.id, $0) })
+    @objc private func persistForBackground() {
+        pendingSave?.cancel()
+        persistCurrentDocument()
     }
 
-    /// Returns the stable installation session used to derive idempotent web node identifiers.
     private static func persistentSessionId() -> String {
         let key = "dim0.native-sync.session-id"
         if let existing = UserDefaults.standard.string(forKey: key) {
@@ -218,13 +273,9 @@ final class NativePencilWebContainer: UIView, PKCanvasViewDelegate {
         UserDefaults.standard.set(created, forKey: key)
         return created
     }
-
-    private static let pendingStrokesKey = "dim0.native-pencil.pending-strokes-v1"
 }
 
-
 extension UIColor {
-    /// Parses the strict six-digit color contract sent by the Dim0 web canvas.
     convenience init?(dim0Hex value: String) {
         let hex = value.trimmingCharacters(in: CharacterSet(charactersIn: "#"))
         guard hex.count == 6, let rgb = UInt64(hex, radix: 16) else { return nil }

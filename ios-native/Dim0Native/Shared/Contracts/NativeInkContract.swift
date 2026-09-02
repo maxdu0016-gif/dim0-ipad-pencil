@@ -1,5 +1,11 @@
 import Foundation
 
+struct NativePencilCamera: Codable, Equatable, Sendable {
+    let x: Double
+    let y: Double
+    let zoom: Double
+}
+
 struct NativeInkPoint: Codable, Equatable, Sendable {
     let x: Double
     let y: Double
@@ -20,11 +26,12 @@ struct NativeInkStroke: Codable, Equatable, Sendable {
     let points: [NativeInkPoint]
 }
 
-/// Versioned one-stroke handoff sent after PencilKit finishes a tool gesture.
-struct NativeCompletedInkStroke: Codable, Equatable, Sendable {
-    let kind = "dim0.native-pencil.stroke"
+/// Complete local PencilKit drawing submitted only when the user requests a sync.
+struct NativePencilInkSnapshot: Codable, Equatable, Sendable {
+    let kind = "dim0.native-pencil.snapshot"
     let version = 1
     let sessionId: String
     let contextId: String
-    let stroke: NativeInkStroke
+    let camera: NativePencilCamera
+    let strokes: [NativeInkStroke]
 }

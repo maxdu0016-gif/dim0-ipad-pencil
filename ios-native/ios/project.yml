@@ -26,7 +26,7 @@ targets:
         GENERATE_INFOPLIST_FILE: NO
         INFOPLIST_FILE: Info.plist
         CODE_SIGN_STYLE: Automatic
-        CURRENT_PROJECT_VERSION: "6"
+        CURRENT_PROJECT_VERSION: "8"
         MARKETING_VERSION: "1.2.0"
     scheme:
       testTargets:

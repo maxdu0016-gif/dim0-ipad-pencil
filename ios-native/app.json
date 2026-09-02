@@ -7,7 +7,7 @@
     "orientation": "default",
     "ios": {
       "bundleIdentifier": "com.dim0.canvas",
-      "buildNumber": "6",
+      "buildNumber": "8",
       "supportsTablet": true,
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false

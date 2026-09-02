@@ -79,7 +79,7 @@ struct Dim0WebView: UIViewRepresentable {
             self.model = model
         }
 
-        /// Receives strict canvas geometry and pen settings from the trusted Dim0 page.
+        /// Receives native ink configuration or an explicit sync request from the trusted Dim0 page.
         func userContentController(
             _ userContentController: WKUserContentController,
             didReceive message: WKScriptMessage
@@ -92,8 +92,17 @@ struct Dim0WebView: UIViewRepresentable {
                       port: message.frameInfo.securityOrigin.port
                   ),
                   let body = message.body as? [String: Any],
-                  body["kind"] as? String == "dim0.native-pencil.configure",
                   (body["version"] as? NSNumber)?.intValue == 1,
+                  let kind = body["kind"] as? String else {
+                return
+            }
+
+            if kind == "dim0.native-pencil.sync" {
+                container?.syncNow()
+                return
+            }
+
+            guard kind == "dim0.native-pencil.configure",
                   let enabled = body["enabled"] as? Bool,
                   let rect = body["rect"] as? [String: Any],
                   let x = rect["x"] as? NSNumber,
@@ -106,7 +115,13 @@ struct Dim0WebView: UIViewRepresentable {
                   !contextId.isEmpty,
                   let storedColor = body["storedColor"] as? String,
                   UIColor(dim0Hex: storedColor) != nil,
-                  let penWidth = body["width"] as? NSNumber else {
+                  let penWidth = body["width"] as? NSNumber,
+                  let tool = body["tool"] as? String,
+                  tool == "pen" || tool == "eraser",
+                  let camera = body["camera"] as? [String: Any],
+                  let cameraX = camera["x"] as? NSNumber,
+                  let cameraY = camera["y"] as? NSNumber,
+                  let cameraZoom = camera["zoom"] as? NSNumber else {
                 return
             }
 
@@ -120,7 +135,11 @@ struct Dim0WebView: UIViewRepresentable {
                   frame.origin.y.isFinite,
                   frame.width.isFinite,
                   frame.height.isFinite,
-                  penWidth.doubleValue.isFinite else {
+                  penWidth.doubleValue.isFinite,
+                  cameraX.doubleValue.isFinite,
+                  cameraY.doubleValue.isFinite,
+                  cameraZoom.doubleValue.isFinite,
+                  cameraZoom.doubleValue > 0 else {
                 return
             }
             container?.configurePencil(
@@ -129,7 +148,13 @@ struct Dim0WebView: UIViewRepresentable {
                 color: color,
                 contextId: contextId,
                 storedColor: storedColor,
-                width: CGFloat(min(64, max(0.5, penWidth.doubleValue)))
+                width: CGFloat(min(64, max(0.5, penWidth.doubleValue))),
+                erasing: tool == "eraser",
+                camera: NativePencilCamera(
+                    x: cameraX.doubleValue,
+                    y: cameraY.doubleValue,
+                    zoom: cameraZoom.doubleValue
+                )
             )
         }
 
@@ -293,27 +318,5 @@ struct Dim0WebView: UIViewRepresentable {
     }
 }
 
-final class PencilAwareWebView: WKWebView, UIPencilInteractionDelegate {
-    var onPencilDoubleTap: (() -> Void)?
-
-    override init(frame: CGRect, configuration: WKWebViewConfiguration) {
-        super.init(frame: frame, configuration: configuration)
-        installPencilInteraction()
-    }
-
-    required init?(coder: NSCoder) {
-        super.init(coder: coder)
-        installPencilInteraction()
-    }
-
-    /// Forwards Apple Pencil double-tap without intercepting Pointer Events used for drawing.
-    func pencilInteractionDidTap(_ interaction: UIPencilInteraction) {
-        onPencilDoubleTap?()
-    }
-
-    private func installPencilInteraction() {
-        let pencilInteraction = UIPencilInteraction()
-        pencilInteraction.delegate = self
-        addInteraction(pencilInteraction)
-    }
-}
+/// Named subclass retained for the existing container type; Pencil interaction lives only on the canvas.
+final class PencilAwareWebView: WKWebView {}

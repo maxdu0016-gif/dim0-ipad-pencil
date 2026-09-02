@@ -1,8 +1,8 @@
 import { useEffect, type RefObject } from "react"
 import type { CanvasStore } from "@canvas-harness/core"
 import { isIOSNative } from "@/platform"
-import { applyNativePencilStroke } from "./apply-native-pencil-stroke"
-import { configureNativePencil, subscribeNativePencilStrokes } from "./native-pencil-bridge"
+import { applyNativePencilSnapshot } from "./apply-native-pencil-stroke"
+import { configureNativePencil, subscribeNativePencilSnapshots } from "./native-pencil-bridge"
 
 
 export type NativePencilCanvasOptions = {
@@ -13,6 +13,7 @@ export type NativePencilCanvasOptions = {
   ready: boolean
   canEdit: boolean
   enabled: boolean
+  erasing: boolean
   color: string
   displayColor: string
   size: number
@@ -28,6 +29,7 @@ export const useNativePencilCanvas = ({
   ready,
   canEdit,
   enabled,
+  erasing,
   color,
   displayColor,
   size,
@@ -37,9 +39,9 @@ export const useNativePencilCanvas = ({
   useEffect(() => {
     if (!isIOSNative()) return
 
-    return subscribeNativePencilStrokes((message) => {
+    return subscribeNativePencilSnapshots((message) => {
       if (!ready || !canEdit || !boardId || message.contextId !== contextId) return false
-      return applyNativePencilStroke(store, message, boardId, parentId).handled
+      return applyNativePencilSnapshot(store, message, boardId, parentId).handled
     })
   }, [store, boardId, parentId, contextId, ready, canEdit])
 
@@ -51,6 +53,7 @@ export const useNativePencilCanvas = ({
     const sendConfiguration = (): void => {
       if (!element) return
       const rect = element.getBoundingClientRect()
+      const camera = store.getCamera()
       configureNativePencil({
         enabled: enabled && ready && canEdit,
         contextId,
@@ -58,6 +61,8 @@ export const useNativePencilCanvas = ({
         color: displayColor,
         storedColor: color,
         width: size * store.getCamera().z,
+        tool: erasing ? "eraser" : "pen",
+        camera: { x: camera.x, y: camera.y, zoom: camera.z },
       })
     }
     const scheduleConfiguration = (): void => {
@@ -80,6 +85,7 @@ export const useNativePencilCanvas = ({
       window.removeEventListener("scroll", scheduleConfiguration, true)
 
       const rect = element?.getBoundingClientRect()
+      const camera = store.getCamera()
       configureNativePencil({
         enabled: false,
         contextId,
@@ -89,7 +95,9 @@ export const useNativePencilCanvas = ({
         color: displayColor,
         storedColor: color,
         width: size * store.getCamera().z,
+        tool: erasing ? "eraser" : "pen",
+        camera: { x: camera.x, y: camera.y, zoom: camera.z },
       })
     }
-  }, [store, wrapRef, contextId, ready, canEdit, enabled, color, displayColor, size])
+  }, [store, wrapRef, contextId, ready, canEdit, enabled, erasing, color, displayColor, size])
 }
