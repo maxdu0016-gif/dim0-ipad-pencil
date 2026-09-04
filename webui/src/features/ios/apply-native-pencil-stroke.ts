@@ -5,7 +5,7 @@ import type { NoteNodeData } from "@/features/board/harness/convert/note-to-node
 import { createInkNode } from "@/features/board/harness/ink/ink-geometry"
 import { adaptNodeColors } from "@/features/board/harness/theme/color-adapter"
 import { getBoardThemeMode } from "@/features/board/harness/theme/theme-mode-ref"
-import type { NativePencilSnapshot } from "./native-pencil-bridge"
+import type { NativePencilMessage } from "./native-pencil-bridge"
 
 
 const NATIVE_INK_NAMESPACE = "cc744ebb-ea24-5f52-b4a2-bf521678c772"
@@ -22,7 +22,7 @@ type RelayProperties = Partial<NoteNodeData["properties"]> & {
 }
 
 
-const nodeIdFor = (snapshot: NativePencilSnapshot, strokeId: string): string =>
+const nodeIdFor = (snapshot: NativePencilMessage, strokeId: string): string =>
   uuidv5(`${snapshot.sessionId}:${strokeId}`, NATIVE_INK_NAMESPACE)
 
 
@@ -52,8 +52,8 @@ const readSource = (node: Node): NativeInkSource | null => {
 
 
 const createNativeInkNode = (
-  snapshot: NativePencilSnapshot,
-  stroke: NativePencilSnapshot["strokes"][number],
+  snapshot: NativePencilMessage,
+  stroke: NativePencilMessage["strokes"][number],
   boardId: string,
   parentId: string | null,
 ): (Omit<Node, "z"> & { z?: number }) | null => {
@@ -102,14 +102,17 @@ export type ApplyNativePencilSnapshotResult = {
 }
 
 
-/** Reconciles one complete local PencilKit document as one undoable board mutation. */
+/** Applies a complete reconciliation or one incremental PencilKit change as one board mutation. */
 export const applyNativePencilSnapshot = (
   store: CanvasStore,
-  snapshot: NativePencilSnapshot,
+  snapshot: NativePencilMessage,
   boardId: string,
   parentId: string | null,
 ): ApplyNativePencilSnapshotResult => {
   const incomingStrokeIds = new Set(snapshot.strokes.map((stroke) => stroke.id))
+  const removedStrokeIds = snapshot.kind === "dim0.native-pencil.snapshot"
+    ? null
+    : new Set(snapshot.removedStrokeIds)
   const existing = new Map<string, Node>()
 
   for (const node of store.getAllNodes()) {
@@ -120,7 +123,7 @@ export const applyNativePencilSnapshot = (
   }
 
   const stale = [...existing.entries()]
-    .filter(([strokeId]) => !incomingStrokeIds.has(strokeId))
+    .filter(([strokeId]) => removedStrokeIds?.has(strokeId) ?? !incomingStrokeIds.has(strokeId))
     .map(([, node]) => node)
   const missing = snapshot.strokes
     .filter((stroke) => !existing.has(stroke.id))
@@ -139,6 +142,6 @@ export const applyNativePencilSnapshot = (
     handled: true,
     added: missing.length,
     removed: stale.length,
-    total: snapshot.strokes.length,
+    total: snapshot.kind === "dim0.native-pencil.snapshot" ? snapshot.strokes.length : snapshot.total,
   }
 }

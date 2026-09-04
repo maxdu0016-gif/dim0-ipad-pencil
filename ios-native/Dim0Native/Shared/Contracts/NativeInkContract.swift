@@ -35,3 +35,17 @@ struct NativePencilInkSnapshot: Codable, Equatable, Sendable {
     let camera: NativePencilCamera
     let strokes: [NativeInkStroke]
 }
+
+/// Ordered batch emitted from the crash-safe local Pencil journal.
+struct NativePencilInkDelta: Codable, Equatable, Sendable {
+    let kind = "dim0.native-pencil.delta"
+    let version = 1
+    let messageId: String
+    let manual: Bool
+    let sessionId: String
+    let contextId: String
+    let camera: NativePencilCamera
+    let strokes: [NativeInkStroke]
+    let removedStrokeIds: [String]
+    let total: Int
+}

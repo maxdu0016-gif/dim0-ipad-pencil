@@ -4,6 +4,7 @@ import Foundation
 struct NativePencilDocument: Codable, Equatable, Sendable {
     let drawing: Data
     let camera: NativePencilCamera
+    let coordinateSpace: String?
     let strokeColors: [String: String]?
 }
 
@@ -14,6 +15,7 @@ actor NativePencilDocumentStore {
 
     private let fileManager: FileManager
     private let baseDirectory: URL?
+    private var latestSaveRevision: [String: UInt64] = [:]
 
     init(fileManager: FileManager = .default, baseDirectory: URL? = nil) {
         self.fileManager = fileManager
@@ -26,13 +28,15 @@ actor NativePencilDocumentStore {
         return try JSONDecoder().decode(NativePencilDocument.self, from: Data(contentsOf: fileURL))
     }
 
-    func save(_ document: NativePencilDocument, contextId: String) throws {
+    func save(_ document: NativePencilDocument, contextId: String, revision: UInt64 = 0) throws {
+        guard revision >= (latestSaveRevision[contextId] ?? 0) else { return }
         let fileURL = try documentURL(contextId: contextId)
         try fileManager.createDirectory(
             at: fileURL.deletingLastPathComponent(),
             withIntermediateDirectories: true
         )
         try JSONEncoder().encode(document).write(to: fileURL, options: .atomic)
+        latestSaveRevision[contextId] = revision
     }
 
     private func documentURL(contextId: String) throws -> URL {

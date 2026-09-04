@@ -102,6 +102,13 @@ struct Dim0WebView: UIViewRepresentable {
                 return
             }
 
+            if kind == "dim0.native-pencil.ack",
+               let messageId = body["messageId"] as? String,
+               let handled = body["handled"] as? Bool {
+                container?.acknowledge(messageId: messageId, handled: handled)
+                return
+            }
+
             guard kind == "dim0.native-pencil.configure",
                   let enabled = body["enabled"] as? Bool,
                   let rect = body["rect"] as? [String: Any],

@@ -8,6 +8,7 @@
       "distribution": "internal",
       "credentialsSource": "remote",
       "ios": {
+        "image": "latest",
         "scheme": "Dim0Native",
         "buildConfiguration": "Release"
       }
@@ -16,6 +17,7 @@
       "distribution": "store",
       "credentialsSource": "remote",
       "ios": {
+        "image": "latest",
         "scheme": "Dim0Native",
         "buildConfiguration": "Release"
       }
@@ -23,7 +25,9 @@
   },
   "submit": {
     "production": {
-      "ios": {}
+      "ios": {
+        "ascAppId": "6808413505"
+      }
     }
   }
 }

@@ -12,6 +12,21 @@ type NativeMessageHandler = {
 }
 
 
+export type NativePencilSyncResult = {
+  total: number
+}
+
+
+type PendingNativePencilSync = {
+  resolve: (result: NativePencilSyncResult) => void
+  reject: (error: Error) => void
+  timeout: ReturnType<typeof setTimeout>
+}
+
+
+let pendingSync: PendingNativePencilSync | null = null
+
+
 declare global {
   interface Window {
     webkit?: {
@@ -37,22 +52,49 @@ const nativePencilStrokeSchema = z.object({
 }).strict()
 
 
+const nativePencilCameraSchema = z.object({
+  x: z.number().finite(),
+  y: z.number().finite(),
+  zoom: z.number().finite().positive(),
+}).strict()
+
+
 const nativePencilSnapshotSchema = z.object({
   kind: z.literal("dim0.native-pencil.snapshot"),
   version: z.literal(1),
   sessionId: z.string().uuid(),
   contextId: z.string().min(1).max(500),
-  camera: z.object({
-    x: z.number().finite(),
-    y: z.number().finite(),
-    zoom: z.number().finite().positive(),
-  }).strict(),
+  camera: nativePencilCameraSchema,
   strokes: z.array(nativePencilStrokeSchema).max(20_000),
   handled: z.boolean().optional(),
 }).strict()
 
 
 export type NativePencilSnapshot = z.infer<typeof nativePencilSnapshotSchema>
+
+
+const nativePencilDeltaSchema = z.object({
+  kind: z.literal("dim0.native-pencil.delta"),
+  version: z.literal(1),
+  messageId: z.string().uuid(),
+  manual: z.boolean(),
+  sessionId: z.string().uuid(),
+  contextId: z.string().min(1).max(500),
+  camera: nativePencilCameraSchema,
+  strokes: z.array(nativePencilStrokeSchema).max(20_000),
+  removedStrokeIds: z.array(z.string().regex(/^[a-f0-9]{64}$/i)).max(20_000),
+  total: z.number().int().nonnegative().max(1_000_000),
+  handled: z.boolean().optional(),
+}).strict()
+
+
+const nativePencilMessageSchema = z.discriminatedUnion("kind", [
+  nativePencilSnapshotSchema,
+  nativePencilDeltaSchema,
+])
+
+
+export type NativePencilMessage = z.infer<typeof nativePencilMessageSchema>
 
 
 export type NativePencilConfiguration = {
@@ -81,27 +123,76 @@ export const configureNativePencil = (configuration: NativePencilConfiguration):
 }
 
 
-/** Requests conversion of the complete local PencilKit document into the current web board. */
-export const requestNativePencilSync = (): boolean => {
+/** Requests one native snapshot and resolves after the active canvas accepts it. */
+export const requestNativePencilSync = (): Promise<NativePencilSyncResult> => {
   const handler = window.webkit?.messageHandlers?.dim0NativePencil
-  if (!handler) return false
+  if (!handler) return Promise.reject(new Error("Native handwriting is unavailable."))
+  if (pendingSync) return Promise.reject(new Error("Handwriting sync is already running."))
 
-  handler.postMessage({ kind: "dim0.native-pencil.sync", version: 1 })
-  return true
+  return new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      pendingSync = null
+      reject(new Error("Handwriting sync timed out."))
+    }, 30_000)
+    pendingSync = { resolve, reject, timeout }
+
+    try {
+      handler.postMessage({ kind: "dim0.native-pencil.sync", version: 1 })
+    } catch (error) {
+      clearTimeout(timeout)
+      pendingSync = null
+      reject(error instanceof Error ? error : new Error("Handwriting sync failed."))
+    }
+  })
 }
 
 
-/** Listens only for snapshots produced by an explicit native Sync action. */
+/** Listens for explicit snapshots and automatic per-stroke PencilKit updates. */
 export const subscribeNativePencilSnapshots = (
-  onSnapshot: (snapshot: NativePencilSnapshot) => boolean,
+  onSnapshot: (snapshot: NativePencilMessage) => boolean | Promise<boolean>,
 ): (() => void) => {
   const listener = (event: Event): void => {
     const customEvent = event as CustomEvent<unknown>
-    const parsed = nativePencilSnapshotSchema.safeParse(customEvent.detail)
+    const parsed = nativePencilMessageSchema.safeParse(customEvent.detail)
     if (!parsed.success) return
 
     const sourceDetail = customEvent.detail as NativePencilGestureDetail
-    sourceDetail.handled = onSnapshot(parsed.data)
+    const complete = (handled: boolean): void => {
+      sourceDetail.handled = handled
+
+      if (parsed.data.kind === "dim0.native-pencil.delta") {
+        try {
+          window.webkit?.messageHandlers?.dim0NativePencil?.postMessage({
+            kind: "dim0.native-pencil.ack",
+            version: 1,
+            messageId: parsed.data.messageId,
+            handled,
+          })
+        } catch {
+          // Native will retain the pending strokes and retry if the ACK cannot be delivered.
+        }
+      }
+
+      const isManualResponse = parsed.data.kind === "dim0.native-pencil.snapshot" || parsed.data.manual
+      if (handled && pendingSync && isManualResponse) {
+        const request = pendingSync
+        pendingSync = null
+        clearTimeout(request.timeout)
+        request.resolve({
+          total: parsed.data.kind === "dim0.native-pencil.snapshot"
+            ? parsed.data.strokes.length
+            : parsed.data.total,
+        })
+      }
+    }
+
+    try {
+      const handled = onSnapshot(parsed.data)
+      if (typeof handled === "boolean") complete(handled)
+      else void handled.then(complete, () => complete(false)).catch(() => {})
+    } catch {
+      complete(false)
+    }
   }
 
   window.addEventListener("dim0:native-pencil-snapshot", listener)

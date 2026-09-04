@@ -7,14 +7,14 @@ canvas node types remain available instead of being rebuilt as a reduced native
 client.
 
 Apple Pencil input is rendered immediately by a transparent native `PKCanvasView`
-over the active board. The complete `PKDrawing` stays local, is saved per board
-after 550 ms of idle time, and follows the web canvas camera while the user pans
-or zooms. Finishing a Pencil stroke does not sample points, serialize JSON, or
-call JavaScript. The toolbar's **同步手写** action is the only path that converts
-the full local drawing into formal web ink nodes; the ordinary persistence and
-WebSocket v2 collaboration paths then carry that explicit snapshot. Finger
-pan/zoom remains on the web canvas, and one native double-tap listener switches
-between PencilKit's pen and vector eraser.
+over the active board. Completed strokes are journaled per board in stable world
+coordinates, sent to the formal web ink store in bounded batches, and removed
+from the native overlay only after the web layer confirms a durable local save.
+This ACK handoff prevents lost strokes and duplicate dark rendering; unconfirmed
+ink is retried after reload. The toolbar's **同步手写** action flushes the pending
+journal. While the pen is active, the native overlay owns board touches so a
+resting palm cannot move the web camera. Erasing uses the web ink eraser, and
+switching away from the pen restores touch pan/zoom.
 
 ## Application URL
 

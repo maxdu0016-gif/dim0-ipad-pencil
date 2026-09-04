@@ -19,14 +19,6 @@ final class PencilCanvasView: PKCanvasView, UIPencilInteractionDelegate {
         onPencilDoubleTap?()
     }
 
-    /// Lets finger gestures reach the web canvas while this overlay owns Apple Pencil strokes.
-    override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
-        guard event?.allTouches?.contains(where: { $0.type == .pencil }) == true else {
-            return nil
-        }
-        return super.hitTest(point, with: event)
-    }
-
     private func installPencilInteraction() {
         let pencilInteraction = UIPencilInteraction()
         pencilInteraction.delegate = self

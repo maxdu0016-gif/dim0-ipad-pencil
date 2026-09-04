@@ -5,34 +5,37 @@ import UIKit
 
 enum PencilStrokeExporter {
     private static let parametricStep: CGFloat = 0.25
+    private static let maximumPointCount = 50_000
 
     /// Converts one completed PencilKit stroke to sampled points relative to the supplied origin.
     static func exportStroke(_ stroke: PKStroke, origin: CGPoint) -> NativeInkStroke? {
         let path = stroke.path
         guard path.count > 0 else { return nil }
 
+        let tool: NativeInkStroke.Tool = stroke.ink.inkType == .marker ? .highlighter : .pen
+        let width = representativeWidth(path: path, tool: tool, transform: stroke.transform)
         let lastParametricValue = CGFloat(path.count - 1)
         var parametricValue: CGFloat = 0
         var points: [NativeInkPoint] = []
 
-        while parametricValue < lastParametricValue {
+        while parametricValue < lastParametricValue && points.count < maximumPointCount - 1 {
             points.append(exportPoint(
                 path.interpolatedPoint(at: parametricValue),
                 transform: stroke.transform,
-                origin: origin
+                origin: origin,
+                baseWidth: width
             ))
             parametricValue += parametricStep
         }
         points.append(exportPoint(
             path.interpolatedPoint(at: lastParametricValue),
             transform: stroke.transform,
-            origin: origin
+            origin: origin,
+            baseWidth: width
         ))
 
         guard !points.isEmpty else { return nil }
-        let tool: NativeInkStroke.Tool = stroke.ink.inkType == .marker ? .highlighter : .pen
         let color = colorComponents(stroke.ink.color)
-        let width = representativeWidth(path: path, tool: tool, transform: stroke.transform)
         let id = stableId(for: stroke)
 
         return NativeInkStroke(
@@ -55,14 +58,20 @@ enum PencilStrokeExporter {
     private static func exportPoint(
         _ point: PKStrokePoint,
         transform: CGAffineTransform,
-        origin: CGPoint
+        origin: CGPoint,
+        baseWidth: Double
     ) -> NativeInkPoint {
         let location = point.location.applying(transform)
-        let pressure = point.force > 0 ? point.force : 0.5
+        let scale = Double(hypot(transform.a, transform.b))
+        let renderedWidth = Double(max(point.size.width, point.size.height)) * scale
+        let sizePressure = (renderedWidth / (2 * baseWidth) - 0.16) / 0.68
+        let pressure = renderedWidth > 0 && sizePressure.isFinite
+            ? sizePressure
+            : (point.force > 0 ? Double(point.force) : 0.5)
         return NativeInkPoint(
             x: Double(location.x - origin.x),
             y: Double(location.y - origin.y),
-            pressure: Double(max(0.05, min(1, pressure)))
+            pressure: max(0.05, min(1, pressure))
         )
     }
 

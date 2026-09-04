@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest"
 import { readInkProperty } from "@/features/board/harness/ink/ink-geometry"
 import { createBoardStore } from "@/features/board/harness/store/create-board-store"
 import { applyNativePencilSnapshot } from "./apply-native-pencil-stroke"
-import type { NativePencilSnapshot } from "./native-pencil-bridge"
+import type { NativePencilMessage, NativePencilSnapshot } from "./native-pencil-bridge"
 
 
 const snapshot = (...ids: string[]): NativePencilSnapshot => ({
@@ -51,5 +51,28 @@ describe("applyNativePencilSnapshot", () => {
 
     expect(result).toEqual({ handled: true, added: 0, removed: 1, total: 1 })
     expect(store.getNodeCount()).toBe(1)
+  })
+
+  it("applies one completed stroke and erase as incremental changes", () => {
+    const store = createBoardStore()
+    applyNativePencilSnapshot(store, snapshot("a", "c"), "board", null)
+    const addedStroke = snapshot("b").strokes[0]!
+    const delta: NativePencilMessage = {
+      kind: "dim0.native-pencil.delta",
+      version: 1,
+      messageId: "965ddcad-785b-42f5-849a-32218af580f7",
+      manual: false,
+      sessionId: "ad7dbd1d-7235-49c9-854f-c00613504eae",
+      contextId: "board:",
+      camera: { x: 100, y: 50, zoom: 2 },
+      strokes: [addedStroke],
+      removedStrokeIds: ["a".repeat(64)],
+      total: 2,
+    }
+
+    const result = applyNativePencilSnapshot(store, delta, "board", null)
+
+    expect(result).toEqual({ handled: true, added: 1, removed: 1, total: 2 })
+    expect(store.getNodeCount()).toBe(2)
   })
 })

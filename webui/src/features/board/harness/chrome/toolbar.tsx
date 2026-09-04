@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react"
+import { toast } from "sonner"
 import {
   ChevronDownIcon,
   CircleClusterIcon,
@@ -41,6 +42,8 @@ import {
 import { cn } from "@/lib/utils"
 import { isIOSNative, isWebKitWebview } from "@/platform"
 import { requestNativePencilSync } from "@/features/ios/native-pencil-bridge"
+import { getBoardPersistenceRef } from "@/features/board/persist/local/board-persistence-ref"
+import { getBoardSyncRef } from "@/features/board/harness/sync/board-sync-ref"
 import { useBoardAppStore } from "../store/board-app-store"
 import { HarnessToolbarMore } from "./toolbar-more"
 
@@ -238,6 +241,32 @@ export function HarnessToolbar({ local = false }: { local?: boolean } = {}) {
   // for styling, and the nested Tooltip/Dropdown triggers both write
   // `data-state`, so a `data-[state=open]:` variant would be ambiguous).
   const [viewMenuOpen, setViewMenuOpen] = useState(false)
+  const [pencilSyncing, setPencilSyncing] = useState(false)
+
+  /** Converts native ink, persists it, and gives the user one honest completion signal. */
+  const syncNativePencil = async (): Promise<void> => {
+    if (pencilSyncing) return
+    setPencilSyncing(true)
+    const toastId = toast.loading("正在同步手写…")
+
+    try {
+      const result = await requestNativePencilSync()
+      const sync = getBoardSyncRef()
+      if (sync) await sync.settle()
+      else await getBoardPersistenceRef()?.flush()
+
+      toast.success(
+        sync
+          ? `手写已保存并进入同步队列（${result.total} 笔）`
+          : `手写已保存到本机（${result.total} 笔）`,
+        { id: toastId },
+      )
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "手写同步失败，请重试。", { id: toastId })
+    } finally {
+      setPencilSyncing(false)
+    }
+  }
 
   const isBoard = viewMode === "board"
   const isPan = tool === "pan"
@@ -426,11 +455,12 @@ export function HarnessToolbar({ local = false }: { local?: boolean } = {}) {
           <TooltipTrigger asChild>
             <button
               type="button"
-              onClick={requestNativePencilSync}
+              onClick={() => void syncNativePencil()}
+              disabled={pencilSyncing}
               aria-label="Sync handwriting"
-              className={inactiveClass}
+              className={cn(inactiveClass, "disabled:cursor-wait disabled:opacity-60")}
             >
-              <LoaderRefreshIcon className="size-4 shrink-0" />
+              <LoaderRefreshIcon className={cn("size-4 shrink-0", pencilSyncing && "animate-spin")} />
             </button>
           </TooltipTrigger>
           <TooltipContent side="bottom" sideOffset={10}>同步手写</TooltipContent>

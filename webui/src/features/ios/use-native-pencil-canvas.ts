@@ -1,5 +1,7 @@
 import { useEffect, type RefObject } from "react"
 import type { CanvasStore } from "@canvas-harness/core"
+import { getBoardPersistenceRef } from "@/features/board/persist/local/board-persistence-ref"
+import { getBoardSyncRef } from "@/features/board/harness/sync/board-sync-ref"
 import { isIOSNative } from "@/platform"
 import { applyNativePencilSnapshot } from "./apply-native-pencil-stroke"
 import { configureNativePencil, subscribeNativePencilSnapshots } from "./native-pencil-bridge"
@@ -39,9 +41,19 @@ export const useNativePencilCanvas = ({
   useEffect(() => {
     if (!isIOSNative()) return
 
-    return subscribeNativePencilSnapshots((message) => {
+    return subscribeNativePencilSnapshots(async (message) => {
       if (!ready || !canEdit || !boardId || message.contextId !== contextId) return false
-      return applyNativePencilSnapshot(store, message, boardId, parentId).handled
+      const result = applyNativePencilSnapshot(store, message, boardId, parentId)
+      if (!result.handled) return false
+
+      const sync = getBoardSyncRef()
+      if (sync) await sync.settle()
+      else {
+        const persistence = getBoardPersistenceRef()
+        if (!persistence) return false
+        await persistence.flush()
+      }
+      return true
     })
   }, [store, boardId, parentId, contextId, ready, canEdit])
 
