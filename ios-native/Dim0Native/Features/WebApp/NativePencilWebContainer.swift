@@ -14,6 +14,13 @@ final class NativePencilWebContainer: UIView, PKCanvasViewDelegate {
         let manual: Bool
     }
 
+    private struct ToolConfiguration {
+        let color: UIColor
+        let storedColor: String
+        let width: CGFloat
+        let erasing: Bool
+    }
+
     private static let logger = Logger(
         subsystem: Bundle.main.bundleIdentifier ?? "com.dim0.canvas",
         category: "NativePencil"
@@ -43,6 +50,8 @@ final class NativePencilWebContainer: UIView, PKCanvasViewDelegate {
     private var pendingCamera: NativePencilCamera?
     private var pendingContext: (id: String, camera: NativePencilCamera)?
     private var finalDrawingFallback: Task<Void, Never>?
+    private var automaticPublish: Task<Void, Never>?
+    private var canvasReconciliation: Task<Void, Never>?
     private var pendingSave: Task<Void, Never>?
     private var saveTask: Task<Void, Never>?
     private var saveRevision: UInt64 = 0
@@ -55,11 +64,23 @@ final class NativePencilWebContainer: UIView, PKCanvasViewDelegate {
     private var isAwaitingFinalDrawingChange = false
     private var isProgrammaticChange = false
     private var hasUncapturedChanges = false
+    private var configuredEraser: Bool?
+    private var configuredInkColor: UIColor?
+    private var configuredInkWidth: CGFloat?
+    private var pendingToolConfiguration: ToolConfiguration?
+
+    private var canCaptureCanvasDrawing: Bool {
+        Self.canCaptureCanvasDrawing(
+            isUsingTool: isUsingTool,
+            isAwaitingFinalDrawingChange: isAwaitingFinalDrawingChange
+        )
+    }
 
     private var canReplaceCanvasDrawing: Bool {
         Self.canReplaceCanvasDrawing(
             isUsingTool: isUsingTool,
-            isAwaitingFinalDrawingChange: isAwaitingFinalDrawingChange
+            isAwaitingFinalDrawingChange: isAwaitingFinalDrawingChange,
+            isDrawingGestureActive: Self.isActiveDrawingGesture(pencilCanvas.drawingGestureRecognizer.state)
         )
     }
 
@@ -118,13 +139,12 @@ final class NativePencilWebContainer: UIView, PKCanvasViewDelegate {
         self.passthroughRects = passthroughRects
         requestedEnabled = enabled && !erasing
         isPageAvailable = true
-        self.storedColor = storedColor
-        isErasing = erasing
-        if erasing {
-            pencilCanvas.tool = PKEraserTool(.vector)
-        } else {
-            pencilCanvas.tool = PKInkingTool(.pen, color: color, width: width)
-        }
+        configureToolIfNeeded(
+            color: color,
+            storedColor: storedColor,
+            width: width,
+            erasing: erasing
+        )
 
         if self.contextId != contextId {
             if !canReplaceCanvasDrawing {
@@ -140,17 +160,23 @@ final class NativePencilWebContainer: UIView, PKCanvasViewDelegate {
                 } else {
                     applyCamera(camera)
                 }
-            } else if !canReplaceCanvasDrawing {
+            } else {
                 pendingCamera = nil
             }
         }
 
         updatePencilAvailability()
-        publishPendingChanges()
+        scheduleAutomaticPublish()
+        scheduleCanvasReconciliation()
         setNeedsLayout()
     }
 
+    /// Stops input and pending idle work while WebKit replaces the active page.
     func disablePencil() {
+        automaticPublish?.cancel()
+        automaticPublish = nil
+        canvasReconciliation?.cancel()
+        canvasReconciliation = nil
         requestedEnabled = false
         isPageAvailable = false
         updatePencilAvailability()
@@ -159,6 +185,8 @@ final class NativePencilWebContainer: UIView, PKCanvasViewDelegate {
     /// Flushes every locally pending stroke when the user explicitly requests a sync.
     func syncNow() {
         guard !contextId.isEmpty, !isLoadingDocument else { return }
+        automaticPublish?.cancel()
+        automaticPublish = nil
         manualPublishQueued = true
         guard canReplaceCanvasDrawing else { return }
         captureWorldDrawing()
@@ -181,6 +209,7 @@ final class NativePencilWebContainer: UIView, PKCanvasViewDelegate {
 
         guard handled else {
             if publish.manual { manualPublishQueued = true }
+            scheduleAutomaticPublish()
             return
         }
 
@@ -195,17 +224,25 @@ final class NativePencilWebContainer: UIView, PKCanvasViewDelegate {
             for strokeId in publish.strokeIds {
                 strokeColors.removeValue(forKey: strokeId)
             }
-            if canReplaceCanvasDrawing {
-                renderWorldDrawing(for: currentCamera)
-            } else {
-                deferredAcknowledgedStrokeIds.formUnion(publish.strokeIds)
-            }
+            deferredAcknowledgedStrokeIds.formUnion(publish.strokeIds)
+            scheduleCanvasReconciliation()
             scheduleSave()
         }
-        publishPendingChanges()
+        if manualPublishQueued {
+            publishPendingChanges()
+        } else {
+            scheduleAutomaticPublish()
+        }
     }
 
+    /// Keeps serialization, bridge delivery, and canvas replacement out of an active Pencil sequence.
     func canvasViewDidBeginUsingTool(_ canvasView: PKCanvasView) {
+        automaticPublish?.cancel()
+        automaticPublish = nil
+        canvasReconciliation?.cancel()
+        canvasReconciliation = nil
+        pendingSave?.cancel()
+        pendingSave = nil
         finalDrawingFallback?.cancel()
         finalDrawingFallback = nil
         isUsingTool = true
@@ -220,7 +257,10 @@ final class NativePencilWebContainer: UIView, PKCanvasViewDelegate {
     func canvasViewDrawingDidChange(_ canvasView: PKCanvasView) {
         guard !isProgrammaticChange else { return }
         hasUncapturedChanges = true
-        guard !isUsingTool else { return }
+        guard Self.shouldFinishDrawingChange(
+            isUsingTool: isUsingTool,
+            isDrawingGestureActive: Self.isActiveDrawingGesture(canvasView.drawingGestureRecognizer.state)
+        ) else { return }
         finalDrawingFallback?.cancel()
         finalDrawingFallback = nil
         isAwaitingFinalDrawingChange = false
@@ -232,11 +272,13 @@ final class NativePencilWebContainer: UIView, PKCanvasViewDelegate {
         finalDrawingFallback?.cancel()
         finalDrawingFallback = Task { [weak self] in
             try? await Task.sleep(for: .milliseconds(500))
+            // Drawing-change callbacks commonly precede tool-up, so pending changes must not block this fallback.
             guard !Task.isCancelled,
                   let self,
-                  !self.isUsingTool,
-                  self.isAwaitingFinalDrawingChange,
-                  !self.hasUncapturedChanges else {
+                  Self.shouldFinishDrawingFallback(
+                      isUsingTool: self.isUsingTool,
+                      isAwaitingFinalDrawingChange: self.isAwaitingFinalDrawingChange
+                  ) else {
                 return
             }
             self.isAwaitingFinalDrawingChange = false
@@ -247,13 +289,16 @@ final class NativePencilWebContainer: UIView, PKCanvasViewDelegate {
 
     /// Captures and publishes only after PencilKit reports its final post-touch drawing update.
     private func finishDrawingChange() {
+        let hadUncapturedChanges = hasUncapturedChanges
         captureWorldDrawing()
-        if !isErasing, let stroke = worldDrawing.strokes.last {
+        if hadUncapturedChanges, !isErasing, let stroke = worldDrawing.strokes.last {
             strokeColors[PencilStrokeExporter.stableId(for: stroke)] = storedColor
         }
-        if !deferredAcknowledgedStrokeIds.isEmpty {
-            deferredAcknowledgedStrokeIds.removeAll()
-            renderWorldDrawing(for: currentCamera)
+        applyPendingToolConfiguration()
+        if !deferredAcknowledgedStrokeIds.isEmpty
+                || pendingCamera != nil
+                || pendingToolConfiguration != nil {
+            scheduleCanvasReconciliation()
         }
         if let pendingContext {
             self.pendingContext = nil
@@ -263,11 +308,10 @@ final class NativePencilWebContainer: UIView, PKCanvasViewDelegate {
         }
         if manualPublishQueued {
             manualSyncTotal = worldDrawing.strokes.count
-        }
-        publishPendingChanges()
-        if let camera = pendingCamera {
-            pendingCamera = nil
-            applyCamera(camera)
+            publishPendingChanges()
+            scheduleAutomaticPublish()
+        } else {
+            scheduleAutomaticPublish()
         }
         scheduleSave()
     }
@@ -296,6 +340,10 @@ final class NativePencilWebContainer: UIView, PKCanvasViewDelegate {
             return
         }
         persistCurrentDocument()
+        automaticPublish?.cancel()
+        automaticPublish = nil
+        canvasReconciliation?.cancel()
+        canvasReconciliation = nil
         finalDrawingFallback?.cancel()
         finalDrawingFallback = nil
         pendingSave?.cancel()
@@ -359,6 +407,7 @@ final class NativePencilWebContainer: UIView, PKCanvasViewDelegate {
             pendingCamera = camera
             return
         }
+        pendingCamera = nil
         currentCamera = camera
         renderWorldDrawing(for: camera)
     }
@@ -380,12 +429,93 @@ final class NativePencilWebContainer: UIView, PKCanvasViewDelegate {
         worldToScreenTransform(camera).inverted()
     }
 
-    /// Prevents model reconciliation from replacing a drawing before PencilKit finalizes it.
-    static func canReplaceCanvasDrawing(
+    /// Allows reading a complete drawing after PencilKit has ended its finalization window.
+    static func canCaptureCanvasDrawing(
         isUsingTool: Bool,
         isAwaitingFinalDrawingChange: Bool
     ) -> Bool {
         !isUsingTool && !isAwaitingFinalDrawingChange
+    }
+
+    /// Prevents model reconciliation from replacing a drawing before PencilKit finalizes it.
+    static func canReplaceCanvasDrawing(
+        isUsingTool: Bool,
+        isAwaitingFinalDrawingChange: Bool,
+        isDrawingGestureActive: Bool = false
+    ) -> Bool {
+        !isUsingTool && !isAwaitingFinalDrawingChange && !isDrawingGestureActive
+    }
+
+    /// Releases PencilKit's finalization window even when its last change arrived before tool-up.
+    static func shouldFinishDrawingFallback(
+        isUsingTool: Bool,
+        isAwaitingFinalDrawingChange: Bool
+    ) -> Bool {
+        !isUsingTool && isAwaitingFinalDrawingChange
+    }
+
+    /// Rejects a partial drawing-change callback that beats PencilKit's begin-tool delegate callback.
+    static func shouldFinishDrawingChange(
+        isUsingTool: Bool,
+        isDrawingGestureActive: Bool
+    ) -> Bool {
+        !isUsingTool && !isDrawingGestureActive
+    }
+
+    /// Treats PencilKit's recognizer as active even before its delegate callback reaches the container.
+    private static func isActiveDrawingGesture(_ state: UIGestureRecognizer.State) -> Bool {
+        state == .began || state == .changed
+    }
+
+    /// Avoids resetting PencilKit's active tool for duplicate web configuration messages.
+    private func configureToolIfNeeded(
+        color: UIColor,
+        storedColor: String,
+        width: CGFloat,
+        erasing: Bool
+    ) {
+        guard configuredEraser != erasing
+                || configuredInkColor?.isEqual(color) != true
+                || configuredInkWidth != width
+                || self.storedColor != storedColor else {
+            pendingToolConfiguration = nil
+            return
+        }
+        let configuration = ToolConfiguration(
+            color: color,
+            storedColor: storedColor,
+            width: width,
+            erasing: erasing
+        )
+        guard canReplaceCanvasDrawing else {
+            pendingToolConfiguration = configuration
+            return
+        }
+        applyToolConfiguration(configuration)
+    }
+
+    /// Applies the latest tool request after the current Pencil sequence is complete.
+    private func applyPendingToolConfiguration() {
+        guard canReplaceCanvasDrawing, let configuration = pendingToolConfiguration else { return }
+        applyToolConfiguration(configuration)
+    }
+
+    /// Commits one deferred or newly changed PencilKit tool configuration.
+    private func applyToolConfiguration(_ configuration: ToolConfiguration) {
+        pendingToolConfiguration = nil
+        let color = configuration.color
+        let width = configuration.width
+        let erasing = configuration.erasing
+        configuredEraser = erasing
+        configuredInkColor = color
+        configuredInkWidth = width
+        storedColor = configuration.storedColor
+        isErasing = erasing
+        if erasing {
+            pencilCanvas.tool = PKEraserTool(.vector)
+        } else {
+            pencilCanvas.tool = PKInkingTool(.pen, color: color, width: width)
+        }
     }
 
     private func updatePencilAvailability() {
@@ -394,13 +524,14 @@ final class NativePencilWebContainer: UIView, PKCanvasViewDelegate {
         pencilCanvas.isUserInteractionEnabled = visible && requestedEnabled
     }
 
+    /// Debounces journal serialization until Pencil input is safely idle.
     private func scheduleSave() {
         guard !contextId.isEmpty else { return }
         pendingSave?.cancel()
         pendingSave = Task { [weak self] in
             try? await Task.sleep(for: .milliseconds(550))
-            guard !Task.isCancelled else { return }
-            self?.persistCurrentDocument()
+            guard !Task.isCancelled, let self, self.canReplaceCanvasDrawing else { return }
+            self.persistCurrentDocument()
         }
     }
 
@@ -454,7 +585,7 @@ final class NativePencilWebContainer: UIView, PKCanvasViewDelegate {
     private func captureWorldDrawing() {
         guard !isProgrammaticChange,
               !isLoadingDocument,
-              canReplaceCanvasDrawing,
+              canCaptureCanvasDrawing,
               hasUncapturedChanges else {
             return
         }
@@ -479,10 +610,50 @@ final class NativePencilWebContainer: UIView, PKCanvasViewDelegate {
         hasUncapturedChanges = false
     }
 
+    /// Replaces the overlay only when the projected world drawing actually changed.
     private func renderWorldDrawing(for camera: NativePencilCamera) {
+        let renderedDrawing = worldDrawing.transformed(using: Self.worldToScreenTransform(camera))
+        guard pencilCanvas.drawing != renderedDrawing else { return }
         isProgrammaticChange = true
-        pencilCanvas.drawing = worldDrawing.transformed(using: Self.worldToScreenTransform(camera))
+        pencilCanvas.drawing = renderedDrawing
         isProgrammaticChange = false
+    }
+
+    /// Batches completed strokes until a short Pencil pause keeps bridge ACKs off the writing path.
+    private func scheduleAutomaticPublish() {
+        guard isPageAvailable,
+              !contextId.isEmpty,
+              !isLoadingDocument,
+              !worldDrawing.strokes.isEmpty,
+              automaticPublish == nil else {
+            return
+        }
+        automaticPublish = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(300))
+            guard !Task.isCancelled, let self else { return }
+            self.automaticPublish = nil
+            self.publishPendingChanges()
+        }
+    }
+
+    /// Applies deferred ACK, camera, or tool changes after the next Pencil contact has time to begin.
+    private func scheduleCanvasReconciliation() {
+        guard !deferredAcknowledgedStrokeIds.isEmpty
+                || pendingCamera != nil
+                || pendingToolConfiguration != nil else {
+            return
+        }
+        canvasReconciliation?.cancel()
+        canvasReconciliation = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(120))
+            guard !Task.isCancelled, let self else { return }
+            self.canvasReconciliation = nil
+            guard self.canReplaceCanvasDrawing else { return }
+            self.captureWorldDrawing()
+            self.deferredAcknowledgedStrokeIds.removeAll()
+            self.applyCamera(self.pendingCamera ?? self.currentCamera)
+            self.applyPendingToolConfiguration()
+        }
     }
 
     /// Sends pending ink in bounded, ordered batches; ACK removes it from the native journal.
@@ -490,10 +661,10 @@ final class NativePencilWebContainer: UIView, PKCanvasViewDelegate {
         guard isPageAvailable,
               !contextId.isEmpty,
               !isLoadingDocument,
-              inFlightPublish == nil else {
+              inFlightPublish == nil,
+              canReplaceCanvasDrawing else {
             return
         }
-        guard !manualPublishQueued || canReplaceCanvasDrawing else { return }
 
         let pendingCount = worldDrawing.strokes.count
         guard pendingCount > 0 || manualPublishQueued else { return }

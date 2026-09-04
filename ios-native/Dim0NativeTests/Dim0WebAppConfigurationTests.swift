@@ -135,6 +135,14 @@ final class Dim0WebAppConfigurationTests: XCTestCase {
     /// ACK reconciliation must wait through both active input and PencilKit's final update window.
     @MainActor
     func testPencilCanvasReplacementWaitsForFinalDrawingChange() {
+        XCTAssertFalse(NativePencilWebContainer.canCaptureCanvasDrawing(
+            isUsingTool: true,
+            isAwaitingFinalDrawingChange: false
+        ))
+        XCTAssertTrue(NativePencilWebContainer.canCaptureCanvasDrawing(
+            isUsingTool: false,
+            isAwaitingFinalDrawingChange: false
+        ))
         XCTAssertFalse(NativePencilWebContainer.canReplaceCanvasDrawing(
             isUsingTool: true,
             isAwaitingFinalDrawingChange: false
@@ -143,9 +151,44 @@ final class Dim0WebAppConfigurationTests: XCTestCase {
             isUsingTool: false,
             isAwaitingFinalDrawingChange: true
         ))
+        XCTAssertFalse(NativePencilWebContainer.canReplaceCanvasDrawing(
+            isUsingTool: false,
+            isAwaitingFinalDrawingChange: false,
+            isDrawingGestureActive: true
+        ))
         XCTAssertTrue(NativePencilWebContainer.canReplaceCanvasDrawing(
             isUsingTool: false,
             isAwaitingFinalDrawingChange: false
+        ))
+    }
+
+    /// Missing post-tool callbacks must still commit the changes observed during the stroke.
+    @MainActor
+    func testPencilFinalDrawingFallbackReleasesAfterToolUp() {
+        XCTAssertTrue(NativePencilWebContainer.shouldFinishDrawingFallback(
+            isUsingTool: false,
+            isAwaitingFinalDrawingChange: true
+        ))
+        XCTAssertFalse(NativePencilWebContainer.shouldFinishDrawingFallback(
+            isUsingTool: true,
+            isAwaitingFinalDrawingChange: true
+        ))
+    }
+
+    /// A drawing change that arrives before the begin-tool delegate must not capture a partial stroke.
+    @MainActor
+    func testPencilDrawingChangeWaitsForInactiveRecognizer() {
+        XCTAssertFalse(NativePencilWebContainer.shouldFinishDrawingChange(
+            isUsingTool: false,
+            isDrawingGestureActive: true
+        ))
+        XCTAssertFalse(NativePencilWebContainer.shouldFinishDrawingChange(
+            isUsingTool: true,
+            isDrawingGestureActive: false
+        ))
+        XCTAssertTrue(NativePencilWebContainer.shouldFinishDrawingChange(
+            isUsingTool: false,
+            isDrawingGestureActive: false
         ))
     }
 }
