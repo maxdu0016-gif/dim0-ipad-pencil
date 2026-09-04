@@ -124,9 +124,16 @@ const MoreMenuItems = ({
  * Mirrors prod's `⋯` More dropdown: Icons / Images / Sub-board /
  * Document / Code sandbox / Mini-app. Sub-board / code-sandbox / mini-app
  * set `tool` so the next canvas click materializes the node; each create-able
- * type shows its per-board `{count}/{limit}` counter.
+ * type shows its per-board `{count}/{limit}` counter. Floating UI opens toward
+ * the canvas when the parent toolbar is docked to a side.
  */
-export function HarnessToolbarMore({ local = false }: { local?: boolean } = {}) {
+export function HarnessToolbarMore({
+  local = false,
+  side = "bottom",
+}: {
+  local?: boolean
+  side?: "bottom" | "left" | "right"
+} = {}) {
   const chromeDialog = useBoardAppStore((s) => s.chromeDialog)
   const setChromeDialog = useBoardAppStore((s) => s.setChromeDialog)
   const boardId = useBoardAppStore((s) => s.boardId) ?? ""
@@ -149,17 +156,17 @@ export function HarnessToolbarMore({ local = false }: { local?: boolean } = {}) 
               <button
                 type="button"
                 aria-label="More actions"
-                className={cn(moreButtonClass)}
+                className={cn(moreButtonClass, side !== "bottom" && "col-span-2")}
               >
                 <EllipsisIcon className="size-4 shrink-0" />
               </button>
             </DropdownMenuTrigger>
           </TooltipTrigger>
-          <TooltipContent side="bottom" sideOffset={10}>More actions</TooltipContent>
+          <TooltipContent side={side} sideOffset={10}>More actions</TooltipContent>
         </Tooltip>
         <DropdownMenuContent
           align="end"
-          side="bottom"
+          side={side}
           sideOffset={8}
           className="min-w-[190px]"
         >

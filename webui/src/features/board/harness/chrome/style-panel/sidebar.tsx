@@ -187,7 +187,10 @@ export function StyleSidebar() {
   if (!kind || !representativeStyle) return null
 
   return (
-    <div className="pointer-events-auto absolute left-3 top-1/2 z-50 w-[160px] -translate-y-1/2">
+    <div
+      data-style-sidebar
+      className="pointer-events-auto absolute left-3 top-1/2 z-50 w-[160px] -translate-y-1/2"
+    >
       <StylePanel
         kind={kind}
         style={representativeStyle}

@@ -1261,6 +1261,15 @@
   }
 }
 
+/* Keep adjacent floating panels clear of a side-docked board toolbar. */
+html[data-board-toolbar-dock="left"] [data-style-sidebar] {
+  left: 7rem;
+}
+
+html[data-board-toolbar-dock="right"] [data-answer-card] {
+  right: 7rem;
+}
+
 /* ============================================================
    STREAMDOWN OVERRIDES
    ============================================================ */

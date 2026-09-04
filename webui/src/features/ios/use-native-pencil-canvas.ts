@@ -3,8 +3,13 @@ import type { CanvasStore } from "@canvas-harness/core"
 import { getBoardPersistenceRef } from "@/features/board/persist/local/board-persistence-ref"
 import { getBoardSyncRef } from "@/features/board/harness/sync/board-sync-ref"
 import { isIOSNative } from "@/platform"
+import { TOOLBAR_DOCK_CHANGE_EVENT } from "@/features/board/harness/chrome/toolbar-dock"
 import { applyNativePencilSnapshot } from "./apply-native-pencil-stroke"
 import { configureNativePencil, subscribeNativePencilSnapshots } from "./native-pencil-bridge"
+import {
+  collectNativePencilPassthroughRects,
+  mutationAffectsNativePencilPassthrough,
+} from "./native-pencil-passthrough"
 
 
 export type NativePencilCanvasOptions = {
@@ -70,6 +75,7 @@ export const useNativePencilCanvas = ({
         enabled: enabled && ready && canEdit,
         contextId,
         rect: { x: rect.x, y: rect.y, width: rect.width, height: rect.height },
+        passthroughRects: collectNativePencilPassthroughRects(),
         color: displayColor,
         storedColor: color,
         width: size * store.getCamera().z,
@@ -84,17 +90,24 @@ export const useNativePencilCanvas = ({
 
     const resizeObserver = new ResizeObserver(scheduleConfiguration)
     if (element) resizeObserver.observe(element)
+    const portalObserver = new MutationObserver((mutations) => {
+      if (mutations.some(mutationAffectsNativePencilPassthrough)) scheduleConfiguration()
+    })
+    if (document.body) portalObserver.observe(document.body, { childList: true, subtree: true })
     const unsubscribeCamera = store.subscribe("camera", scheduleConfiguration)
     window.addEventListener("resize", scheduleConfiguration)
     window.addEventListener("scroll", scheduleConfiguration, true)
+    window.addEventListener(TOOLBAR_DOCK_CHANGE_EVENT, scheduleConfiguration)
     scheduleConfiguration()
 
     return () => {
       cancelAnimationFrame(animationFrame)
       resizeObserver.disconnect()
+      portalObserver.disconnect()
       unsubscribeCamera()
       window.removeEventListener("resize", scheduleConfiguration)
       window.removeEventListener("scroll", scheduleConfiguration, true)
+      window.removeEventListener(TOOLBAR_DOCK_CHANGE_EVENT, scheduleConfiguration)
 
       const rect = element?.getBoundingClientRect()
       const camera = store.getCamera()
@@ -104,6 +117,7 @@ export const useNativePencilCanvas = ({
         rect: rect
           ? { x: rect.x, y: rect.y, width: rect.width, height: rect.height }
           : { x: 0, y: 0, width: 0, height: 0 },
+        passthroughRects: [],
         color: displayColor,
         storedColor: color,
         width: size * store.getCamera().z,

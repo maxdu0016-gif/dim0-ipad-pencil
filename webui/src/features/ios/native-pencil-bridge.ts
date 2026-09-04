@@ -97,10 +97,19 @@ const nativePencilMessageSchema = z.discriminatedUnion("kind", [
 export type NativePencilMessage = z.infer<typeof nativePencilMessageSchema>
 
 
+export type NativePencilRect = {
+  x: number
+  y: number
+  width: number
+  height: number
+}
+
+
 export type NativePencilConfiguration = {
   enabled: boolean
   contextId: string
-  rect: { x: number; y: number; width: number; height: number }
+  rect: NativePencilRect
+  passthroughRects: NativePencilRect[]
   color: string
   storedColor: string
   width: number

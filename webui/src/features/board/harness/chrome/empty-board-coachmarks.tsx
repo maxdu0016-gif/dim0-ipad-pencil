@@ -2,6 +2,7 @@ import { type CSSProperties, useEffect, useMemo, useState } from "react"
 import { useEdges, useNodes } from "@canvas-harness/react"
 
 import { useBoardAppStore } from "../store/board-app-store"
+import { TOOLBAR_DOCK_CHANGE_EVENT } from "./toolbar-dock"
 import "./empty-board-coachmarks.css"
 
 
@@ -121,11 +122,19 @@ export function EmptyBoardCoachmarks({ ready }: { ready: boolean }) {
     measure()
     const r1 = requestAnimationFrame(measure)
     const r2 = requestAnimationFrame(() => requestAnimationFrame(measure))
+    let dockFrame = 0
+    const handleToolbarDockChange = () => {
+      cancelAnimationFrame(dockFrame)
+      dockFrame = requestAnimationFrame(measure)
+    }
     window.addEventListener("resize", measure)
+    window.addEventListener(TOOLBAR_DOCK_CHANGE_EVENT, handleToolbarDockChange)
     return () => {
       cancelAnimationFrame(r1)
       cancelAnimationFrame(r2)
+      cancelAnimationFrame(dockFrame)
       window.removeEventListener("resize", measure)
+      window.removeEventListener(TOOLBAR_DOCK_CHANGE_EVENT, handleToolbarDockChange)
     }
   }, [show])
 
@@ -152,7 +161,9 @@ export function EmptyBoardCoachmarks({ ready }: { ready: boolean }) {
   if (!show) return null
   if (vp.w < MOBILE_BREAKPOINT) return null
 
-  const connectors = CALLOUTS.map((c) => {
+  const toolbarIsSideDocked = document.documentElement.dataset.boardToolbarDock === "left"
+    || document.documentElement.dataset.boardToolbarDock === "right"
+  const connectors = CALLOUTS.filter((c) => c.anchor !== "toolbar" || !toolbarIsSideDocked).map((c) => {
     const rect = anchors[c.anchor]
     if (!rect) return null
     const cx = rect.left + rect.width / 2

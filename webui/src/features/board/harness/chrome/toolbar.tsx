@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useState } from "react"
 import { toast } from "sonner"
 import {
   ChevronDownIcon,
@@ -40,12 +40,19 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip"
 import { cn } from "@/lib/utils"
-import { isIOSNative, isWebKitWebview } from "@/platform"
+import { isIOSNative } from "@/platform"
 import { requestNativePencilSync } from "@/features/ios/native-pencil-bridge"
 import { getBoardPersistenceRef } from "@/features/board/persist/local/board-persistence-ref"
 import { getBoardSyncRef } from "@/features/board/harness/sync/board-sync-ref"
 import { useBoardAppStore } from "../store/board-app-store"
+import {
+  readToolbarDock,
+  TOOLBAR_DOCK_CHANGE_EVENT,
+  writeToolbarDock,
+  type ToolbarDock,
+} from "./toolbar-dock"
 import { HarnessToolbarMore } from "./toolbar-more"
+import { DockableToolbarTray } from "./toolbar-shell"
 
 
 type ShapeTool = {
@@ -104,12 +111,7 @@ const ShortcutHint = ({ shortcut }: { shortcut: string }) => (
 )
 
 
-/**
- * Floating tool tray for the canvas-harness board — center-top. Mirrors
- * prod's `TopBar` styling (sidebar surface, rounded-xl, blurred bg) and
- * icon set while preserving the harness's tool-mode contract (each
- * button sets `tool` on board-app-store; canvas-harness reacts to it).
- */
+/** Board-level views available from the toolbar's leading menu. */
 const VIEW_OPTIONS = [
   { id: "board" as const, label: "Board", icon: GraphViewIcon },
   { id: "files" as const, label: "Files", icon: GridViewIcon },
@@ -117,108 +119,21 @@ const VIEW_OPTIONS = [
 ]
 
 
-const TRAY_H = 46
-const TRAY_R = 13
+type ToolbarPopupSide = "bottom" | "left" | "right"
 
 
-/**
- * SVG silhouette for the toolbar "tray": concave top corners that flare OUTWARD
- * to the top edge, convex rounded bottom corners, open top. One path, sized to
- * the measured content width so the corners stay circular at any width.
- */
-const trayPath = (w: number, h: number, r: number): string =>
-  `M0 0 A${r} ${r} 0 0 1 ${r} ${r}` +
-  ` L${r} ${h - r} A${r} ${r} 0 0 0 ${2 * r} ${h}` +
-  ` L${w - 2 * r} ${h} A${r} ${r} 0 0 0 ${w - r} ${h - r}` +
-  ` L${w - r} ${r} A${r} ${r} 0 0 1 ${w} 0`
-
-
-/**
- * Toolbar shell shaped as a flared tray docked to the top edge. The blurred,
- * themed fill is clipped to the path; a hairline SVG stroke draws the outline;
- * a drop-shadow (stronger on hover) follows the silhouette. Width is measured
- * from the content row so the path fits the current toolbar exactly.
- */
-function FlaredTray({
-  children,
-  className,
-  ...rest
-}: { children: React.ReactNode } & React.HTMLAttributes<HTMLDivElement>) {
-  const rowRef = useRef<HTMLDivElement>(null)
-  const [w, setW] = useState(0)
-  const [hover, setHover] = useState(false)
-  // WebKit webviews only (see isWebKitWebview) — Windows/Chromium keeps the blur.
-  const webkit = isWebKitWebview()
-
-  useEffect(() => {
-    const el = rowRef.current
-    if (!el) return
-    // Measure the BORDER box (offsetWidth) so the tray path spans the full row
-    // incl. its horizontal padding. contentRect excludes padding, which drew the
-    // path ~32px short and let the rightmost ("…") button spill past the border.
-    const ro = new ResizeObserver(() => setW(el.offsetWidth))
-    ro.observe(el)
-    return () => ro.disconnect()
-  }, [])
-
-  const d = w > 0 ? trayPath(w, TRAY_H, TRAY_R) : ""
+/** Divider that follows the toolbar's horizontal or side-docked layout. */
+function ToolbarSeparator({ dock }: { dock: ToolbarDock }) {
+  const vertical = dock === "top"
 
   return (
-    <div
-      className={cn("absolute left-1/2 top-0 z-50 -translate-x-1/2", className)}
-      onMouseEnter={() => setHover(true)}
-      onMouseLeave={() => setHover(false)}
-      {...rest}
-    >
-      <div className="relative">
-        {d && (
-          <>
-            {/* Frosted backdrop. CRITICAL: nothing above this in the tree may set
-                `filter`/`opacity`/`mask` — such an ancestor becomes a "backdrop
-                root" and silently no-ops backdrop-filter (the blur had nothing to
-                sample). So the drop-shadow lives on the sibling tint layer below,
-                never on a wrapper.
-                SKIPPED on WebKit webviews (macOS/Linux): `backdrop-filter`
-                re-samples the canvas behind the tray every pan frame, a real jank
-                source there — the tint below goes near-opaque instead. Kept on
-                Windows/Chromium (cheap) and web. */}
-            {!webkit && (
-              <div
-                className="pointer-events-none absolute inset-0 backdrop-blur-xl backdrop-saturate-[1.8]"
-                style={{ clipPath: `path('${d}')` }}
-              />
-            )}
-            {/* Translucent tint + the tray's drop-shadow. A sibling of the blur
-                layer (not an ancestor), so it doesn't isolate the backdrop. On
-                WebKit it carries the fill alone (near-opaque, no blur). */}
-            <div
-              className={cn("pointer-events-none absolute inset-0", webkit ? "bg-sidebar/95" : "bg-sidebar/60")}
-              style={{
-                clipPath: `path('${d}')`,
-                filter: hover
-                  ? "drop-shadow(0 10px 22px rgba(0,0,0,0.22))"
-                  : "drop-shadow(0 2px 5px rgba(0,0,0,0.10))",
-                transition: "filter .2s ease",
-              }}
-            />
-            <svg
-              className="pointer-events-none absolute inset-0"
-              width={w}
-              height={TRAY_H}
-              style={{ overflow: "visible" }}
-              aria-hidden
-            >
-              <path d={d} fill="none" stroke="var(--border)" strokeWidth={1} />
-            </svg>
-          </>
-        )}
-        {/* px chosen so the first/last button sit ~5px inside the tray's side
-            border (x = TRAY_R), matching the ~5px top/bottom gap → balanced. */}
-        <div ref={rowRef} className="relative flex items-center gap-1 px-[18px]" style={{ height: TRAY_H }}>
-          {children}
-        </div>
-      </div>
-    </div>
+    <Separator
+      orientation={vertical ? "vertical" : "horizontal"}
+      className={cn(
+        "hidden md:block",
+        vertical ? "md:!h-6" : "col-span-2 md:!h-px md:!w-8",
+      )}
+    />
   )
 }
 
@@ -242,6 +157,23 @@ export function HarnessToolbar({ local = false }: { local?: boolean } = {}) {
   // `data-state`, so a `data-[state=open]:` variant would be ambiguous).
   const [viewMenuOpen, setViewMenuOpen] = useState(false)
   const [pencilSyncing, setPencilSyncing] = useState(false)
+  const [dock, setDock] = useState<ToolbarDock>(() => readToolbarDock())
+
+  useEffect(() => {
+    document.documentElement.dataset.boardToolbarDock = dock
+    return () => {
+      if (document.documentElement.dataset.boardToolbarDock === dock) {
+        delete document.documentElement.dataset.boardToolbarDock
+      }
+    }
+  }, [dock])
+
+  const changeDock = (nextDock: ToolbarDock): void => {
+    setDock(nextDock)
+    writeToolbarDock(nextDock)
+    document.documentElement.dataset.boardToolbarDock = nextDock
+    window.dispatchEvent(new Event(TOOLBAR_DOCK_CHANGE_EVENT))
+  }
 
   /** Converts native ink, persists it, and gives the user one honest completion signal. */
   const syncNativePencil = async (): Promise<void> => {
@@ -276,9 +208,16 @@ export function HarnessToolbar({ local = false }: { local?: boolean } = {}) {
   const shapeMenuOpen = chromeDialog === "shape-menu"
   const activeView = VIEW_OPTIONS.find((v) => v.id === viewMode) ?? VIEW_OPTIONS[0]
   const ActiveViewIcon = activeView.icon
+  const popupSide: ToolbarPopupSide = dock === "left"
+    ? "right"
+    : dock === "right"
+      ? "left"
+      : "bottom"
 
   return (
-    <FlaredTray
+    <DockableToolbarTray
+      dock={dock}
+      onDockChange={changeDock}
       className="text-sidebar-foreground"
       role="toolbar"
       aria-label="Board toolbar"
@@ -292,19 +231,27 @@ export function HarnessToolbar({ local = false }: { local?: boolean } = {}) {
                 type="button"
                 aria-label="Change view"
                 aria-pressed={viewMenuOpen}
-                className={viewMenuOpen ? activeClass : inactiveClass}
+                className={cn(
+                  viewMenuOpen ? activeClass : inactiveClass,
+                  dock !== "top" && "col-span-2",
+                )}
               >
                 <ActiveViewIcon className="size-4 shrink-0" weight="fill" />
-                <span className="sr-only text-[10px] md:not-sr-only">
+                <span className={cn("sr-only text-[10px]", dock === "top" && "md:not-sr-only")}>
                   {activeView.label}
                 </span>
-                <ChevronDownIcon className="hidden size-3 shrink-0 text-muted-foreground md:block" />
+                <ChevronDownIcon
+                  className={cn(
+                    "hidden size-3 shrink-0 text-muted-foreground",
+                    dock === "top" && "md:block",
+                  )}
+                />
               </button>
             </DropdownMenuTrigger>
           </TooltipTrigger>
-          <TooltipContent side="bottom" sideOffset={10}>Change view</TooltipContent>
+          <TooltipContent side={popupSide} sideOffset={10}>Change view</TooltipContent>
         </Tooltip>
-        <DropdownMenuContent align="start" side="bottom" sideOffset={8} className="min-w-[160px]">
+        <DropdownMenuContent align="start" side={popupSide} sideOffset={8} className="min-w-[160px]">
           {VIEW_OPTIONS.map((option) => {
             const Icon = option.icon
             return (
@@ -324,7 +271,7 @@ export function HarnessToolbar({ local = false }: { local?: boolean } = {}) {
         </DropdownMenuContent>
       </DropdownMenu>
 
-      <Separator orientation="vertical" className="hidden md:!h-6 md:block" />
+      <ToolbarSeparator dock={dock} />
 
       {/*
         Canvas-only tools are hidden in non-board view modes. The
@@ -353,7 +300,7 @@ export function HarnessToolbar({ local = false }: { local?: boolean } = {}) {
             </div>
           </button>
         </TooltipTrigger>
-        <TooltipContent side="bottom" sideOffset={10}>Pan</TooltipContent>
+        <TooltipContent side={popupSide} sideOffset={10}>Pan</TooltipContent>
       </Tooltip>
 
       <Tooltip>
@@ -374,10 +321,13 @@ export function HarnessToolbar({ local = false }: { local?: boolean } = {}) {
             </div>
           </button>
         </TooltipTrigger>
-        <TooltipContent side="bottom" sideOffset={10}>Select</TooltipContent>
+        <TooltipContent side={popupSide} sideOffset={10}>Select</TooltipContent>
       </Tooltip>
 
-      <div className="flex items-center">
+      <div className={cn(
+        "flex items-center",
+        dock !== "top" && tool === "ink" && "col-span-2 justify-center",
+      )}>
         <Tooltip>
           <TooltipTrigger asChild>
             <button
@@ -390,7 +340,7 @@ export function HarnessToolbar({ local = false }: { local?: boolean } = {}) {
               <PencilEditIcon className="size-4 shrink-0" weight={tool === "ink" ? "fill" : undefined} />
             </button>
           </TooltipTrigger>
-          <TooltipContent side="bottom" sideOffset={10}>Pen</TooltipContent>
+          <TooltipContent side={popupSide} sideOffset={10}>Pen</TooltipContent>
         </Tooltip>
         {tool === "ink" && (
           <Popover>
@@ -406,7 +356,7 @@ export function HarnessToolbar({ local = false }: { local?: boolean } = {}) {
                 />
               </button>
             </PopoverTrigger>
-            <PopoverContent side="bottom" sideOffset={10} className="w-56 space-y-4">
+            <PopoverContent side={popupSide} sideOffset={10} className="w-56 space-y-4">
               <label className="flex items-center justify-between gap-3 text-sm">
                 <span>Color</span>
                 <input
@@ -447,7 +397,7 @@ export function HarnessToolbar({ local = false }: { local?: boolean } = {}) {
             <EraserIcon className="size-4 shrink-0" weight={tool === "eraser" ? "fill" : undefined} />
           </button>
         </TooltipTrigger>
-        <TooltipContent side="bottom" sideOffset={10}>Eraser</TooltipContent>
+        <TooltipContent side={popupSide} sideOffset={10}>Eraser</TooltipContent>
       </Tooltip>
 
       {isIOSNative() && (
@@ -463,11 +413,11 @@ export function HarnessToolbar({ local = false }: { local?: boolean } = {}) {
               <LoaderRefreshIcon className={cn("size-4 shrink-0", pencilSyncing && "animate-spin")} />
             </button>
           </TooltipTrigger>
-          <TooltipContent side="bottom" sideOffset={10}>同步手写</TooltipContent>
+          <TooltipContent side={popupSide} sideOffset={10}>同步手写</TooltipContent>
         </Tooltip>
       )}
 
-      <Separator orientation="vertical" className="hidden md:!h-6 md:block" />
+      <ToolbarSeparator dock={dock} />
 
       <DropdownMenu
         open={shapeMenuOpen}
@@ -487,14 +437,19 @@ export function HarnessToolbar({ local = false }: { local?: boolean } = {}) {
                     weight={isShape ? "fill" : undefined}
                   />
                   <ShortcutHint shortcut="S" />
-                  <ChevronDownIcon className="absolute inset-x-0 -bottom-3.5 size-3 text-muted-foreground" />
+                  <ChevronDownIcon
+                    className={cn(
+                      "absolute inset-x-0 -bottom-3.5 size-3 text-muted-foreground",
+                      dock !== "top" && "hidden",
+                    )}
+                  />
                 </div>
               </button>
             </DropdownMenuTrigger>
           </TooltipTrigger>
-          <TooltipContent side="bottom" sideOffset={10}>Shapes</TooltipContent>
+          <TooltipContent side={popupSide} sideOffset={10}>Shapes</TooltipContent>
         </Tooltip>
-        <DropdownMenuContent align="center" side="bottom" sideOffset={8} className="min-w-[180px]">
+        <DropdownMenuContent align="center" side={popupSide} sideOffset={8} className="min-w-[180px]">
           {SHAPE_TOOLS.map((s) => {
             const Icon = s.icon
             return (
@@ -530,7 +485,7 @@ export function HarnessToolbar({ local = false }: { local?: boolean } = {}) {
             </div>
           </button>
         </TooltipTrigger>
-        <TooltipContent side="bottom" sideOffset={10}>Connector</TooltipContent>
+        <TooltipContent side={popupSide} sideOffset={10}>Connector</TooltipContent>
       </Tooltip>
 
       <Tooltip>
@@ -551,7 +506,7 @@ export function HarnessToolbar({ local = false }: { local?: boolean } = {}) {
             </div>
           </button>
         </TooltipTrigger>
-        <TooltipContent side="bottom" sideOffset={10}>Text</TooltipContent>
+        <TooltipContent side={popupSide} sideOffset={10}>Text</TooltipContent>
       </Tooltip>
 
       <Tooltip>
@@ -561,7 +516,10 @@ export function HarnessToolbar({ local = false }: { local?: boolean } = {}) {
             onClick={() => setTool("sheet")}
             aria-label="Note"
             aria-pressed={tool === "sheet"}
-            className={tool === "sheet" ? activeClass : inactiveClass}
+            className={cn(
+              tool === "sheet" ? activeClass : inactiveClass,
+              dock !== "top" && "col-span-2",
+            )}
           >
             <div className="relative">
               <NotepadIcon
@@ -572,10 +530,10 @@ export function HarnessToolbar({ local = false }: { local?: boolean } = {}) {
             </div>
           </button>
         </TooltipTrigger>
-        <TooltipContent side="bottom" sideOffset={10}>Note</TooltipContent>
+        <TooltipContent side={popupSide} sideOffset={10}>Note</TooltipContent>
       </Tooltip>
 
-      <Separator orientation="vertical" className="hidden md:!h-6 md:block" />
+      <ToolbarSeparator dock={dock} />
 
       <Tooltip>
         <TooltipTrigger asChild>
@@ -584,7 +542,10 @@ export function HarnessToolbar({ local = false }: { local?: boolean } = {}) {
             onClick={() => setSlidesPanelOpen(!slidesPanelOpen)}
             aria-label="Slides"
             aria-pressed={slidesPanelOpen}
-            className={slidesPanelOpen ? activeClass : inactiveClass}
+            className={cn(
+              slidesPanelOpen ? activeClass : inactiveClass,
+              dock !== "top" && "col-span-2",
+            )}
           >
             <div className="relative">
               <PresentationIcon
@@ -595,14 +556,14 @@ export function HarnessToolbar({ local = false }: { local?: boolean } = {}) {
             </div>
           </button>
         </TooltipTrigger>
-        <TooltipContent side="bottom" sideOffset={10}>Slides</TooltipContent>
+        <TooltipContent side={popupSide} sideOffset={10}>Slides</TooltipContent>
       </Tooltip>
 
-      <Separator orientation="vertical" className="hidden md:!h-6 md:block" />
+      <ToolbarSeparator dock={dock} />
       </>
       )}
 
-      <HarnessToolbarMore local={local} />
-    </FlaredTray>
+      <HarnessToolbarMore local={local} side={popupSide} />
+    </DockableToolbarTray>
   )
 }

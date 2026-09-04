@@ -27,6 +27,7 @@ final class NativePencilWebContainer: UIView, PKCanvasViewDelegate {
     private let documentStore: NativePencilDocumentStore
     private let sessionId: String
     private var overlayFrame = CGRect.zero
+    private var passthroughRects = [CGRect]()
     private var contextId = ""
     private var storedColor = "#1F1F24"
     private var strokeColors: [String: String] = [:]
@@ -89,16 +90,23 @@ final class NativePencilWebContainer: UIView, PKCanvasViewDelegate {
         NotificationCenter.default.removeObserver(self)
     }
 
+    /// Aligns the web app, native ink overlay, and web-control passthrough regions.
     override func layoutSubviews() {
         super.layoutSubviews()
         webView.frame = bounds
-        pencilCanvas.frame = overlayFrame.intersection(bounds)
+        let clippedFrame = overlayFrame.intersection(bounds)
+        pencilCanvas.frame = clippedFrame.isNull ? .zero : clippedFrame
+        pencilCanvas.passthroughRects = passthroughRects.compactMap { rect in
+            let localRect = pencilCanvas.convert(rect, from: self).intersection(pencilCanvas.bounds)
+            return localRect.isNull || localRect.isEmpty ? nil : localRect
+        }
     }
 
-    /// Updates the native tool and viewport without exporting anything on the writing path.
+    /// Updates the native tool, viewport, and web-control holes without exporting on the writing path.
     func configurePencil(
         enabled: Bool,
         frame: CGRect,
+        passthroughRects: [CGRect],
         color: UIColor,
         contextId: String,
         storedColor: String,
@@ -107,6 +115,7 @@ final class NativePencilWebContainer: UIView, PKCanvasViewDelegate {
         camera: NativePencilCamera
     ) {
         overlayFrame = frame
+        self.passthroughRects = passthroughRects
         requestedEnabled = enabled && !erasing
         isPageAvailable = true
         self.storedColor = storedColor

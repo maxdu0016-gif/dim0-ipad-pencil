@@ -62,6 +62,10 @@ describe("native Pencil bridge", () => {
       enabled: true,
       contextId: "board:",
       rect: { x: 1, y: 2, width: 300, height: 200 },
+      passthroughRects: [
+        { x: 20, y: 0, width: 200, height: 54 },
+        { x: 98, y: 46, width: 44, height: 44 },
+      ],
       color: "#FFFFFF",
       storedColor: "#1F1F24",
       width: 8,

@@ -71,6 +71,8 @@ struct Dim0WebView: UIViewRepresentable {
 
     @MainActor
     final class Coordinator: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownloadDelegate, WKScriptMessageHandler {
+        private static let maximumPencilPassthroughRects = 64
+
         private let model: Dim0WebAppModel
         private var downloadDestinations: [ObjectIdentifier: URL] = [:]
         weak var container: NativePencilWebContainer?
@@ -149,9 +151,13 @@ struct Dim0WebView: UIViewRepresentable {
                   cameraZoom.doubleValue > 0 else {
                 return
             }
+            let passthroughRects = (body["passthroughRects"] as? [[String: Any]] ?? [])
+                .prefix(Self.maximumPencilPassthroughRects)
+                .compactMap { Self.passthroughRect(from: $0) }
             container?.configurePencil(
                 enabled: enabled,
                 frame: frame,
+                passthroughRects: passthroughRects,
                 color: color,
                 contextId: contextId,
                 storedColor: storedColor,
@@ -163,6 +169,31 @@ struct Dim0WebView: UIViewRepresentable {
                     zoom: cameraZoom.doubleValue
                 )
             )
+        }
+
+        /// Parses one optional web-control hole while rejecting invalid UIKit geometry.
+        private static func passthroughRect(from value: [String: Any]) -> CGRect? {
+            guard let x = value["x"] as? NSNumber,
+                  let y = value["y"] as? NSNumber,
+                  let width = value["width"] as? NSNumber,
+                  let height = value["height"] as? NSNumber else {
+                return nil
+            }
+            let rect = CGRect(
+                x: CGFloat(x.doubleValue),
+                y: CGFloat(y.doubleValue),
+                width: CGFloat(width.doubleValue),
+                height: CGFloat(height.doubleValue)
+            )
+            guard rect.origin.x.isFinite,
+                  rect.origin.y.isFinite,
+                  rect.width.isFinite,
+                  rect.height.isFinite,
+                  rect.width >= 0,
+                  rect.height >= 0 else {
+                return nil
+            }
+            return rect
         }
 
         /// Keeps target-blank links inside the app so authentication and app routes retain one session.

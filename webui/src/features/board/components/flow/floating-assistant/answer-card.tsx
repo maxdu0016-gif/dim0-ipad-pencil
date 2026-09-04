@@ -18,7 +18,8 @@ export interface AnswerCardProps {
 /**
  * Right-floating reader for the current turn's text answer. Pulses a soft ring
  * when a new answer arrives and hides while a turn is streaming. Dismissal is
- * per-message: closing the card keeps it closed until the next completion.
+ * per-message: closing the card keeps it closed until the next completion. A
+ * right-docked board toolbar shifts the card inward through its data hook.
  */
 export const AnswerCard = ({ onOpenFullSheet }: AnswerCardProps) => {
   const { chatId, local } = useChat()
@@ -58,6 +59,7 @@ export const AnswerCard = ({ onOpenFullSheet }: AnswerCardProps) => {
   return (
     <div
       key={assistantMessage.id}
+      data-answer-card
       className={cn(
         "fixed top-20 right-4 z-[60] w-[380px] max-w-[calc(100vw-2rem)]",
         "pointer-events-auto hidden md:block"
