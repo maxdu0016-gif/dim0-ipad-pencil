@@ -111,4 +111,29 @@ describe("DockableToolbarTray pointer dragging", () => {
     act(() => handle.dispatchEvent(pointerEvent("lostpointercapture", { id: 7, x: 600, y: 120 })))
     expect((toolbar.firstElementChild as HTMLElement | null)?.style.transform).toBe("")
   })
+
+  it("isolates tool presses from canvas ancestors while preserving the button event", () => {
+    const onCanvasPointerDown = vi.fn()
+    const onToolPointerDown = vi.fn()
+    act(() => {
+      root.render(
+        <div onPointerDown={onCanvasPointerDown}>
+          <DockableToolbarTray dock="left" onDockChange={() => {}}>
+            <button type="button" onPointerDown={onToolPointerDown}>Pen</button>
+          </DockableToolbarTray>
+        </div>,
+      )
+    })
+
+    const tool = container.querySelector<HTMLButtonElement>("button:not([data-toolbar-drag-handle])")
+    const scrollArea = container.querySelector<HTMLElement>("[data-toolbar-dock] [class*='overflow-y-auto']")
+    expect(tool).not.toBeNull()
+    expect(scrollArea?.className).toContain("touch-pan-y")
+    if (!tool) return
+
+    act(() => tool.dispatchEvent(pointerEvent("pointerdown", { id: 9, x: 20, y: 100 })))
+
+    expect(onToolPointerDown).toHaveBeenCalledOnce()
+    expect(onCanvasPointerDown).not.toHaveBeenCalled()
+  })
 })

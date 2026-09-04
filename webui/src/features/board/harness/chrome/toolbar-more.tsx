@@ -35,7 +35,7 @@ import { ImageSearchDialog } from "./image-search-dialog"
 // Always-present transparent border so the hover border doesn't shift the icon;
 // the fill change alone is near-invisible against the tray (see toolbar.tsx).
 const moreButtonClass =
-  "transition-colors !p-2.5 rounded-lg flex items-center justify-center gap-2 border border-transparent text-card-foreground hover:bg-secondary hover:text-secondary-foreground hover:border-secondary-foreground/30"
+  "min-h-11 min-w-11 touch-manipulation transition-colors !p-2.5 rounded-lg flex items-center justify-center gap-2 border border-transparent text-card-foreground hover:bg-secondary hover:text-secondary-foreground hover:border-secondary-foreground/30"
 
 
 /**
@@ -76,17 +76,17 @@ const MoreMenuItems = ({
 
   return (
     <>
-      <DropdownMenuItem onSelect={() => setChromeDialog("icon-search")} className="gap-2 text-sm">
+      <DropdownMenuItem onSelect={() => setChromeDialog("icon-search")} className="min-h-11 gap-2 text-sm">
         <PuzzlePieceIcon className="size-4 shrink-0" />
         <span>Icons</span>
         <DropdownMenuShortcut>G</DropdownMenuShortcut>
       </DropdownMenuItem>
-      <DropdownMenuItem onSelect={() => setChromeDialog("image-search")} className="gap-2 text-sm">
+      <DropdownMenuItem onSelect={() => setChromeDialog("image-search")} className="min-h-11 gap-2 text-sm">
         <ImageStackIcon className="size-4 shrink-0" />
         <span>Images</span>
         <DropdownMenuShortcut>I</DropdownMenuShortcut>
       </DropdownMenuItem>
-      <DropdownMenuItem onSelect={() => setTool("folder")} className="gap-2 text-sm">
+      <DropdownMenuItem onSelect={() => setTool("folder")} className="min-h-11 gap-2 text-sm">
         <FolderPlusActionIcon className="size-4 shrink-0" />
         <span>Sub-board</span>
         <NodeLimitBadge count={folderCount} limit={nodeLimitFor("folder", userPlan)} />
@@ -98,18 +98,18 @@ const MoreMenuItems = ({
         onSelect={() => (localUpload ? upload.pick() : setChromeDialog("document-upload"))}
         disabled={localUpload && !upload.canParse}
         title={localUpload && !upload.canParse ? "Sign in or add a Mistral key to upload documents" : undefined}
-        className="gap-2 text-sm"
+        className="min-h-11 gap-2 text-sm"
       >
         <DocumentFileIcon className="size-4 shrink-0" />
         <span>Document</span>
         <NodeLimitBadge count={documentCount} limit={nodeLimitFor("document", userPlan)} />
       </DropdownMenuItem>
-      <DropdownMenuItem onSelect={() => setTool("code-sandbox")} className="gap-2 text-sm">
+      <DropdownMenuItem onSelect={() => setTool("code-sandbox")} className="min-h-11 gap-2 text-sm">
         <CodeFileIcon className="size-4 shrink-0" />
         <span>Code sandbox</span>
         <NodeLimitBadge count={codeSandboxCount} limit={nodeLimitFor("code-sandbox", userPlan)} />
       </DropdownMenuItem>
-      <DropdownMenuItem onSelect={() => setTool("mini-app")} className="gap-2 text-sm">
+      <DropdownMenuItem onSelect={() => setTool("mini-app")} className="min-h-11 gap-2 text-sm">
         <CursorClickIcon className="size-4 shrink-0" />
         <span>Mini-app</span>
         <NodeLimitBadge count={miniAppCount} limit={nodeLimitFor("mini-app", userPlan)} />
@@ -162,7 +162,13 @@ export function HarnessToolbarMore({
               </button>
             </DropdownMenuTrigger>
           </TooltipTrigger>
-          <TooltipContent side={side} sideOffset={10}>More actions</TooltipContent>
+          <TooltipContent
+            className="hidden [@media(hover:hover)_and_(pointer:fine)]:block"
+            side={side}
+            sideOffset={10}
+          >
+            More actions
+          </TooltipContent>
         </Tooltip>
         <DropdownMenuContent
           align="end"

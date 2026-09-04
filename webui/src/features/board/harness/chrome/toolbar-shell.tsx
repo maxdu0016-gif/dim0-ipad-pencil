@@ -155,6 +155,7 @@ export function DockableToolbarTray({
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
       {...rest}
+      onPointerDown={(event) => event.stopPropagation()}
       data-toolbar-dock={dock}
       data-native-pencil-passthrough=""
       aria-orientation={dock === "top" ? "horizontal" : "vertical"}
@@ -209,7 +210,7 @@ export function DockableToolbarTray({
             "relative items-center gap-1",
             dock === "top"
               ? "flex px-[18px]"
-              : "grid grid-cols-2 place-items-center overflow-y-auto overscroll-contain p-2",
+              : "grid touch-pan-y grid-cols-2 place-items-center overflow-y-auto overscroll-contain p-2",
           )}
           style={dock === "top"
             ? { height: TRAY_HEIGHT }

@@ -96,9 +96,10 @@ const SHAPE_TOOL_IDS = new Set(SHAPE_TOOLS.map((t) => t.id))
 // Hover is a lighter preview (translucent fill + faint border); active is the
 // full-strength fill + border, so the two states read distinctly.
 const baseButtonClass =
-  "transition-colors !p-2.5 rounded-lg flex items-center justify-center gap-2 border"
+  "min-h-11 min-w-11 touch-manipulation transition-colors !p-2.5 rounded-lg flex items-center justify-center gap-2 border"
 const inactiveClass = `${baseButtonClass} border-transparent text-card-foreground hover:bg-secondary/50 hover:text-secondary-foreground hover:border-secondary-foreground/20`
 const activeClass = `${baseButtonClass} border-secondary-foreground/30 bg-secondary text-secondary-foreground`
+const toolbarTooltipClass = "hidden [@media(hover:hover)_and_(pointer:fine)]:block"
 
 
 /**
@@ -214,6 +215,17 @@ export function HarnessToolbar({ local = false }: { local?: boolean } = {}) {
       ? "left"
       : "bottom"
 
+  /** Selects promptly for direct input without turning a side-palette scroll into a tap. */
+  const toolSelectionHandlers = (nextTool: string) => ({
+    onPointerDown: (event: React.PointerEvent<HTMLButtonElement>): void => {
+      if (event.isPrimary && event.pointerType === "pen") setTool(nextTool)
+    },
+    onPointerUp: (event: React.PointerEvent<HTMLButtonElement>): void => {
+      if (event.isPrimary && event.pointerType === "touch") setTool(nextTool)
+    },
+    onClick: (): void => setTool(nextTool),
+  })
+
   return (
     <DockableToolbarTray
       dock={dock}
@@ -249,7 +261,9 @@ export function HarnessToolbar({ local = false }: { local?: boolean } = {}) {
               </button>
             </DropdownMenuTrigger>
           </TooltipTrigger>
-          <TooltipContent side={popupSide} sideOffset={10}>Change view</TooltipContent>
+          <TooltipContent className={toolbarTooltipClass} side={popupSide} sideOffset={10}>
+            Change view
+          </TooltipContent>
         </Tooltip>
         <DropdownMenuContent align="start" side={popupSide} sideOffset={8} className="min-w-[160px]">
           {VIEW_OPTIONS.map((option) => {
@@ -258,7 +272,7 @@ export function HarnessToolbar({ local = false }: { local?: boolean } = {}) {
               <DropdownMenuItem
                 key={option.id}
                 onSelect={() => setViewMode(option.id)}
-                className="gap-2 text-sm"
+                className="min-h-11 gap-2 text-sm"
               >
                 <Icon
                   className="size-4 shrink-0"
@@ -285,7 +299,7 @@ export function HarnessToolbar({ local = false }: { local?: boolean } = {}) {
         <TooltipTrigger asChild>
           <button
             type="button"
-            onClick={() => setTool("pan")}
+            {...toolSelectionHandlers("pan")}
             aria-label="Pan"
             aria-pressed={isPan}
             className={isPan ? activeClass : inactiveClass}
@@ -300,14 +314,14 @@ export function HarnessToolbar({ local = false }: { local?: boolean } = {}) {
             </div>
           </button>
         </TooltipTrigger>
-        <TooltipContent side={popupSide} sideOffset={10}>Pan</TooltipContent>
+        <TooltipContent className={toolbarTooltipClass} side={popupSide} sideOffset={10}>Pan</TooltipContent>
       </Tooltip>
 
       <Tooltip>
         <TooltipTrigger asChild>
           <button
             type="button"
-            onClick={() => setTool("select")}
+            {...toolSelectionHandlers("select")}
             aria-label="Select"
             aria-pressed={isSelect}
             className={isSelect ? activeClass : inactiveClass}
@@ -321,7 +335,7 @@ export function HarnessToolbar({ local = false }: { local?: boolean } = {}) {
             </div>
           </button>
         </TooltipTrigger>
-        <TooltipContent side={popupSide} sideOffset={10}>Select</TooltipContent>
+        <TooltipContent className={toolbarTooltipClass} side={popupSide} sideOffset={10}>Select</TooltipContent>
       </Tooltip>
 
       <div className={cn(
@@ -332,7 +346,7 @@ export function HarnessToolbar({ local = false }: { local?: boolean } = {}) {
           <TooltipTrigger asChild>
             <button
               type="button"
-              onClick={() => setTool("ink")}
+              {...toolSelectionHandlers("ink")}
               aria-label="Pen"
               aria-pressed={tool === "ink"}
               className={tool === "ink" ? activeClass : inactiveClass}
@@ -340,7 +354,7 @@ export function HarnessToolbar({ local = false }: { local?: boolean } = {}) {
               <PencilEditIcon className="size-4 shrink-0" weight={tool === "ink" ? "fill" : undefined} />
             </button>
           </TooltipTrigger>
-          <TooltipContent side={popupSide} sideOffset={10}>Pen</TooltipContent>
+          <TooltipContent className={toolbarTooltipClass} side={popupSide} sideOffset={10}>Pen</TooltipContent>
         </Tooltip>
         {tool === "ink" && (
           <Popover>
@@ -348,7 +362,7 @@ export function HarnessToolbar({ local = false }: { local?: boolean } = {}) {
               <button
                 type="button"
                 aria-label="Pen settings"
-                className="ml-0.5 flex size-6 items-center justify-center rounded-md hover:bg-secondary/60"
+                className="ml-0.5 flex size-11 touch-manipulation items-center justify-center rounded-md hover:bg-secondary/60"
               >
                 <span
                   className="size-3 rounded-full border border-foreground/20"
@@ -389,7 +403,7 @@ export function HarnessToolbar({ local = false }: { local?: boolean } = {}) {
         <TooltipTrigger asChild>
           <button
             type="button"
-            onClick={() => setTool("eraser")}
+            {...toolSelectionHandlers("eraser")}
             aria-label="Eraser"
             aria-pressed={tool === "eraser"}
             className={tool === "eraser" ? activeClass : inactiveClass}
@@ -397,7 +411,7 @@ export function HarnessToolbar({ local = false }: { local?: boolean } = {}) {
             <EraserIcon className="size-4 shrink-0" weight={tool === "eraser" ? "fill" : undefined} />
           </button>
         </TooltipTrigger>
-        <TooltipContent side={popupSide} sideOffset={10}>Eraser</TooltipContent>
+        <TooltipContent className={toolbarTooltipClass} side={popupSide} sideOffset={10}>Eraser</TooltipContent>
       </Tooltip>
 
       {isIOSNative() && (
@@ -413,7 +427,7 @@ export function HarnessToolbar({ local = false }: { local?: boolean } = {}) {
               <LoaderRefreshIcon className={cn("size-4 shrink-0", pencilSyncing && "animate-spin")} />
             </button>
           </TooltipTrigger>
-          <TooltipContent side={popupSide} sideOffset={10}>同步手写</TooltipContent>
+          <TooltipContent className={toolbarTooltipClass} side={popupSide} sideOffset={10}>同步手写</TooltipContent>
         </Tooltip>
       )}
 
@@ -447,7 +461,7 @@ export function HarnessToolbar({ local = false }: { local?: boolean } = {}) {
               </button>
             </DropdownMenuTrigger>
           </TooltipTrigger>
-          <TooltipContent side={popupSide} sideOffset={10}>Shapes</TooltipContent>
+          <TooltipContent className={toolbarTooltipClass} side={popupSide} sideOffset={10}>Shapes</TooltipContent>
         </Tooltip>
         <DropdownMenuContent align="center" side={popupSide} sideOffset={8} className="min-w-[180px]">
           {SHAPE_TOOLS.map((s) => {
@@ -456,7 +470,7 @@ export function HarnessToolbar({ local = false }: { local?: boolean } = {}) {
               <DropdownMenuItem
                 key={s.id}
                 onSelect={() => setTool(s.id)}
-                className="gap-2 text-sm"
+                className="min-h-11 gap-2 text-sm"
               >
                 <Icon className="size-4 shrink-0" />
                 <span>{s.label}</span>
@@ -471,7 +485,7 @@ export function HarnessToolbar({ local = false }: { local?: boolean } = {}) {
         <TooltipTrigger asChild>
           <button
             type="button"
-            onClick={() => setTool("arrow")}
+            {...toolSelectionHandlers("arrow")}
             aria-label="Connector"
             aria-pressed={tool === "arrow"}
             className={tool === "arrow" ? activeClass : inactiveClass}
@@ -485,14 +499,14 @@ export function HarnessToolbar({ local = false }: { local?: boolean } = {}) {
             </div>
           </button>
         </TooltipTrigger>
-        <TooltipContent side={popupSide} sideOffset={10}>Connector</TooltipContent>
+        <TooltipContent className={toolbarTooltipClass} side={popupSide} sideOffset={10}>Connector</TooltipContent>
       </Tooltip>
 
       <Tooltip>
         <TooltipTrigger asChild>
           <button
             type="button"
-            onClick={() => setTool("text")}
+            {...toolSelectionHandlers("text")}
             aria-label="Text"
             aria-pressed={tool === "text"}
             className={tool === "text" ? activeClass : inactiveClass}
@@ -506,14 +520,14 @@ export function HarnessToolbar({ local = false }: { local?: boolean } = {}) {
             </div>
           </button>
         </TooltipTrigger>
-        <TooltipContent side={popupSide} sideOffset={10}>Text</TooltipContent>
+        <TooltipContent className={toolbarTooltipClass} side={popupSide} sideOffset={10}>Text</TooltipContent>
       </Tooltip>
 
       <Tooltip>
         <TooltipTrigger asChild>
           <button
             type="button"
-            onClick={() => setTool("sheet")}
+            {...toolSelectionHandlers("sheet")}
             aria-label="Note"
             aria-pressed={tool === "sheet"}
             className={cn(
@@ -530,7 +544,7 @@ export function HarnessToolbar({ local = false }: { local?: boolean } = {}) {
             </div>
           </button>
         </TooltipTrigger>
-        <TooltipContent side={popupSide} sideOffset={10}>Note</TooltipContent>
+        <TooltipContent className={toolbarTooltipClass} side={popupSide} sideOffset={10}>Note</TooltipContent>
       </Tooltip>
 
       <ToolbarSeparator dock={dock} />
@@ -556,7 +570,7 @@ export function HarnessToolbar({ local = false }: { local?: boolean } = {}) {
             </div>
           </button>
         </TooltipTrigger>
-        <TooltipContent side={popupSide} sideOffset={10}>Slides</TooltipContent>
+        <TooltipContent className={toolbarTooltipClass} side={popupSide} sideOffset={10}>Slides</TooltipContent>
       </Tooltip>
 
       <ToolbarSeparator dock={dock} />
