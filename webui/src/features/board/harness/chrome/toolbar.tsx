@@ -1,11 +1,14 @@
 import { useEffect, useState } from "react"
 import { toast } from "sonner"
+import type { EdgeId } from "@canvas-harness/core"
+import { useCanvasStore, useSelection } from "@canvas-harness/react"
 import {
   ChevronDownIcon,
   CircleClusterIcon,
   CircleShapeIcon,
   ConnectorPathIcon,
   CursorSelectIcon,
+  DeleteIcon,
   DiamondShapeIcon,
   EraserIcon,
   GraphViewIcon,
@@ -140,8 +143,11 @@ function ToolbarSeparator({ dock }: { dock: ToolbarDock }) {
 
 
 export function HarnessToolbar({ local = false }: { local?: boolean } = {}) {
+  const store = useCanvasStore()
+  const selection = useSelection()
   const tool = useBoardAppStore((s) => s.tool)
   const setTool = useBoardAppStore((s) => s.setTool)
+  const canEdit = useBoardAppStore((s) => s.canEdit)
   const inkColor = useBoardAppStore((s) => s.inkColor)
   const setInkColor = useBoardAppStore((s) => s.setInkColor)
   const inkSize = useBoardAppStore((s) => s.inkSize)
@@ -159,6 +165,18 @@ export function HarnessToolbar({ local = false }: { local?: boolean } = {}) {
   const [viewMenuOpen, setViewMenuOpen] = useState(false)
   const [pencilSyncing, setPencilSyncing] = useState(false)
   const [dock, setDock] = useState<ToolbarDock>(() => readToolbarDock())
+  const selectedEdgeIds = selection.filter((id) => store.getEdge(id as EdgeId)) as EdgeId[]
+  const selectedEdgeCount = canEdit && selectedEdgeIds.length === selection.length
+    ? selectedEdgeIds.length
+    : 0
+
+  const removeSelectedEdges = (): void => {
+    if (selectedEdgeCount === 0) return
+    store.batch(() => {
+      for (const id of selectedEdgeIds) store.removeEdge(id)
+    })
+    store.setSelection([])
+  }
 
   useEffect(() => {
     document.documentElement.dataset.boardToolbarDock = dock
@@ -337,6 +355,27 @@ export function HarnessToolbar({ local = false }: { local?: boolean } = {}) {
         </TooltipTrigger>
         <TooltipContent className={toolbarTooltipClass} side={popupSide} sideOffset={10}>Select</TooltipContent>
       </Tooltip>
+
+      {selectedEdgeCount > 0 && (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              type="button"
+              onClick={removeSelectedEdges}
+              aria-label={selectedEdgeCount === 1 ? "Delete selected connector" : "Delete selected connectors"}
+              className={cn(
+                baseButtonClass,
+                "border-destructive/30 text-destructive hover:bg-destructive/10",
+              )}
+            >
+              <DeleteIcon className="size-4 shrink-0" />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent className={toolbarTooltipClass} side={popupSide} sideOffset={10}>
+            Delete connector
+          </TooltipContent>
+        </Tooltip>
+      )}
 
       <div className={cn(
         "flex items-center",

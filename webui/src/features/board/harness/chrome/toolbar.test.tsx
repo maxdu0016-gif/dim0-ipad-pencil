@@ -1,6 +1,8 @@
 import { act } from "react"
 import { createRoot, type Root } from "react-dom/client"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { asEdgeId, createCanvasStore, type CanvasStore, type EdgeId } from "@canvas-harness/core"
+import { CanvasProvider } from "@canvas-harness/react"
 
 import { useBoardAppStore } from "../store/board-app-store"
 import { HarnessToolbar } from "./toolbar"
@@ -48,6 +50,7 @@ function directPointerEvent(
 describe("HarnessToolbar direct pointer selection", () => {
   let container: HTMLDivElement
   let root: Root
+  let store: CanvasStore
   let originalActEnvironment: boolean | undefined
   let originalResizeObserver: typeof ResizeObserver
 
@@ -56,11 +59,16 @@ describe("HarnessToolbar direct pointer selection", () => {
     reactTestGlobal.IS_REACT_ACT_ENVIRONMENT = true
     originalResizeObserver = globalThis.ResizeObserver
     globalThis.ResizeObserver = ResizeObserverStub as unknown as typeof ResizeObserver
-    useBoardAppStore.setState({ tool: "select", viewMode: "board", chromeDialog: null })
+    useBoardAppStore.setState({ canEdit: true, tool: "select", viewMode: "board", chromeDialog: null })
     container = document.createElement("div")
     document.body.appendChild(container)
     root = createRoot(container)
-    act(() => root.render(<HarnessToolbar />))
+    store = createCanvasStore()
+    act(() => root.render(
+      <CanvasProvider store={store}>
+        <HarnessToolbar />
+      </CanvasProvider>,
+    ))
   })
 
   afterEach(() => {
@@ -99,6 +107,39 @@ describe("HarnessToolbar direct pointer selection", () => {
     act(() => pan.dispatchEvent(directPointerEvent("pointercancel", "touch")))
 
     expect(useBoardAppStore.getState().tool).toBe("select")
+  })
+
+  it("offers a touch-sized delete action for a selected connector", () => {
+    const edgeIds = [asEdgeId(store.generateId()), asEdgeId(store.generateId())]
+    act(() => {
+      for (const [index, id] of edgeIds.entries()) {
+        store.addEdge({
+          id,
+          source: { worldPoint: { x: 0, y: index * 20 } },
+          target: { worldPoint: { x: 100, y: index * 20 } },
+          pathStyle: "straight",
+          groups: [],
+          style: {},
+          data: {},
+        })
+      }
+      store.setSelection(edgeIds)
+    })
+
+    const remove = container.querySelector<HTMLButtonElement>('button[aria-label="Delete selected connectors"]')
+    expect(remove?.className).toContain("min-h-11")
+    expect(remove?.className).toContain("min-w-11")
+    if (!remove) return
+
+    act(() => remove.click())
+
+    expect(edgeIds.every((id: EdgeId) => store.getEdge(id) === undefined)).toBe(true)
+    expect(store.getSelection()).toEqual([])
+
+    act(() => {
+      store.undo()
+    })
+    expect(edgeIds.every((id: EdgeId) => store.getEdge(id) !== undefined)).toBe(true)
   })
 
   it("keeps every primary tool target at least 44 CSS pixels wide and tall", () => {
