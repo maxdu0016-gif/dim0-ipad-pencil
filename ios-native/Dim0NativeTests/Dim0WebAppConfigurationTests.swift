@@ -131,4 +131,21 @@ final class Dim0WebAppConfigurationTests: XCTestCase {
         XCTAssertEqual(restored.x, worldPoint.x, accuracy: 0.000_001)
         XCTAssertEqual(restored.y, worldPoint.y, accuracy: 0.000_001)
     }
+
+    /// ACK reconciliation must wait through both active input and PencilKit's final update window.
+    @MainActor
+    func testPencilCanvasReplacementWaitsForFinalDrawingChange() {
+        XCTAssertFalse(NativePencilWebContainer.canReplaceCanvasDrawing(
+            isUsingTool: true,
+            isAwaitingFinalDrawingChange: false
+        ))
+        XCTAssertFalse(NativePencilWebContainer.canReplaceCanvasDrawing(
+            isUsingTool: false,
+            isAwaitingFinalDrawingChange: true
+        ))
+        XCTAssertTrue(NativePencilWebContainer.canReplaceCanvasDrawing(
+            isUsingTool: false,
+            isAwaitingFinalDrawingChange: false
+        ))
+    }
 }

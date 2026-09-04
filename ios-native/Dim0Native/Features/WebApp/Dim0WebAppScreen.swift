@@ -6,7 +6,6 @@ struct Dim0WebAppScreen: View {
     var body: some View {
         ZStack {
             Dim0WebView(model: model)
-                .ignoresSafeArea()
 
             if model.isLoading {
                 ProgressView("正在打开完整 Dim0…")

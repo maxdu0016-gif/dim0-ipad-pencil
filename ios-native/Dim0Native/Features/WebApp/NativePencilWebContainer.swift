@@ -36,11 +36,12 @@ final class NativePencilWebContainer: UIView, PKCanvasViewDelegate {
     private var manualPublishQueued = false
     private var manualSyncTotal = 0
     private var requiresLegacyManualSync = false
-    private var acknowledgedWhileUsingTool: Set<String> = []
+    private var deferredAcknowledgedStrokeIds: Set<String> = []
     private var isErasing = false
     private var currentCamera = NativePencilCamera(x: 0, y: 0, zoom: 1)
     private var pendingCamera: NativePencilCamera?
     private var pendingContext: (id: String, camera: NativePencilCamera)?
+    private var finalDrawingFallback: Task<Void, Never>?
     private var pendingSave: Task<Void, Never>?
     private var saveTask: Task<Void, Never>?
     private var saveRevision: UInt64 = 0
@@ -50,8 +51,16 @@ final class NativePencilWebContainer: UIView, PKCanvasViewDelegate {
     private var isPageAvailable = false
     private var isLoadingDocument = false
     private var isUsingTool = false
+    private var isAwaitingFinalDrawingChange = false
     private var isProgrammaticChange = false
     private var hasUncapturedChanges = false
+
+    private var canReplaceCanvasDrawing: Bool {
+        Self.canReplaceCanvasDrawing(
+            isUsingTool: isUsingTool,
+            isAwaitingFinalDrawingChange: isAwaitingFinalDrawingChange
+        )
+    }
 
     var onPencilDoubleTap: (() -> Void)?
 
@@ -109,7 +118,7 @@ final class NativePencilWebContainer: UIView, PKCanvasViewDelegate {
         }
 
         if self.contextId != contextId {
-            if isUsingTool {
+            if !canReplaceCanvasDrawing {
                 pendingContext = (contextId, camera)
             } else {
                 switchContext(to: contextId, camera: camera)
@@ -117,12 +126,12 @@ final class NativePencilWebContainer: UIView, PKCanvasViewDelegate {
         } else {
             pendingContext = nil
             if camera != currentCamera {
-                if isUsingTool {
+                if !canReplaceCanvasDrawing {
                     pendingCamera = camera
                 } else {
                     applyCamera(camera)
                 }
-            } else if isUsingTool {
+            } else if !canReplaceCanvasDrawing {
                 pendingCamera = nil
             }
         }
@@ -141,8 +150,9 @@ final class NativePencilWebContainer: UIView, PKCanvasViewDelegate {
     /// Flushes every locally pending stroke when the user explicitly requests a sync.
     func syncNow() {
         guard !contextId.isEmpty, !isLoadingDocument else { return }
-        captureWorldDrawing()
         manualPublishQueued = true
+        guard canReplaceCanvasDrawing else { return }
+        captureWorldDrawing()
         manualSyncTotal = worldDrawing.strokes.count
         publishPendingChanges()
     }
@@ -176,10 +186,10 @@ final class NativePencilWebContainer: UIView, PKCanvasViewDelegate {
             for strokeId in publish.strokeIds {
                 strokeColors.removeValue(forKey: strokeId)
             }
-            if isUsingTool {
-                acknowledgedWhileUsingTool.formUnion(publish.strokeIds)
-            } else {
+            if canReplaceCanvasDrawing {
                 renderWorldDrawing(for: currentCamera)
+            } else {
+                deferredAcknowledgedStrokeIds.formUnion(publish.strokeIds)
             }
             scheduleSave()
         }
@@ -187,17 +197,53 @@ final class NativePencilWebContainer: UIView, PKCanvasViewDelegate {
     }
 
     func canvasViewDidBeginUsingTool(_ canvasView: PKCanvasView) {
+        finalDrawingFallback?.cancel()
+        finalDrawingFallback = nil
         isUsingTool = true
     }
 
     func canvasViewDidEndUsingTool(_ canvasView: PKCanvasView) {
         isUsingTool = false
+        isAwaitingFinalDrawingChange = true
+        scheduleFinalDrawingFallback()
+    }
+
+    func canvasViewDrawingDidChange(_ canvasView: PKCanvasView) {
+        guard !isProgrammaticChange else { return }
+        hasUncapturedChanges = true
+        guard !isUsingTool else { return }
+        finalDrawingFallback?.cancel()
+        finalDrawingFallback = nil
+        isAwaitingFinalDrawingChange = false
+        finishDrawingChange()
+    }
+
+    /// Releases a tool sequence that ended without a final content-change callback.
+    private func scheduleFinalDrawingFallback() {
+        finalDrawingFallback?.cancel()
+        finalDrawingFallback = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(500))
+            guard !Task.isCancelled,
+                  let self,
+                  !self.isUsingTool,
+                  self.isAwaitingFinalDrawingChange,
+                  !self.hasUncapturedChanges else {
+                return
+            }
+            self.isAwaitingFinalDrawingChange = false
+            self.finalDrawingFallback = nil
+            self.finishDrawingChange()
+        }
+    }
+
+    /// Captures and publishes only after PencilKit reports its final post-touch drawing update.
+    private func finishDrawingChange() {
         captureWorldDrawing()
         if !isErasing, let stroke = worldDrawing.strokes.last {
             strokeColors[PencilStrokeExporter.stableId(for: stroke)] = storedColor
         }
-        if !acknowledgedWhileUsingTool.isEmpty {
-            acknowledgedWhileUsingTool.removeAll()
+        if !deferredAcknowledgedStrokeIds.isEmpty {
+            deferredAcknowledgedStrokeIds.removeAll()
             renderWorldDrawing(for: currentCamera)
         }
         if let pendingContext {
@@ -206,17 +252,15 @@ final class NativePencilWebContainer: UIView, PKCanvasViewDelegate {
             switchContext(to: pendingContext.id, camera: pendingContext.camera)
             return
         }
+        if manualPublishQueued {
+            manualSyncTotal = worldDrawing.strokes.count
+        }
         publishPendingChanges()
         if let camera = pendingCamera {
             pendingCamera = nil
             applyCamera(camera)
         }
         scheduleSave()
-    }
-
-    func canvasViewDrawingDidChange(_ canvasView: PKCanvasView) {
-        guard !isProgrammaticChange else { return }
-        hasUncapturedChanges = true
     }
 
     private func configureViews() {
@@ -238,14 +282,20 @@ final class NativePencilWebContainer: UIView, PKCanvasViewDelegate {
     }
 
     private func switchContext(to newContextId: String, camera: NativePencilCamera) {
+        guard canReplaceCanvasDrawing else {
+            pendingContext = (newContextId, camera)
+            return
+        }
         persistCurrentDocument()
+        finalDrawingFallback?.cancel()
+        finalDrawingFallback = nil
         pendingSave?.cancel()
         publishTimeout?.cancel()
         inFlightPublish = nil
         manualPublishQueued = false
         manualSyncTotal = 0
         requiresLegacyManualSync = false
-        acknowledgedWhileUsingTool.removeAll()
+        deferredAcknowledgedStrokeIds.removeAll()
         pendingCamera = nil
         pendingContext = nil
         loadGeneration += 1
@@ -253,6 +303,7 @@ final class NativePencilWebContainer: UIView, PKCanvasViewDelegate {
         contextId = newContextId
         currentCamera = camera
         isLoadingDocument = true
+        isAwaitingFinalDrawingChange = false
         isProgrammaticChange = true
         pencilCanvas.drawing = PKDrawing()
         isProgrammaticChange = false
@@ -295,6 +346,10 @@ final class NativePencilWebContainer: UIView, PKCanvasViewDelegate {
     }
 
     private func applyCamera(_ camera: NativePencilCamera) {
+        guard canReplaceCanvasDrawing else {
+            pendingCamera = camera
+            return
+        }
         currentCamera = camera
         renderWorldDrawing(for: camera)
     }
@@ -314,6 +369,14 @@ final class NativePencilWebContainer: UIView, PKCanvasViewDelegate {
     /// Converts overlay coordinates back to stable board-world coordinates.
     static func screenToWorldTransform(_ camera: NativePencilCamera) -> CGAffineTransform {
         worldToScreenTransform(camera).inverted()
+    }
+
+    /// Prevents model reconciliation from replacing a drawing before PencilKit finalizes it.
+    static func canReplaceCanvasDrawing(
+        isUsingTool: Bool,
+        isAwaitingFinalDrawingChange: Bool
+    ) -> Bool {
+        !isUsingTool && !isAwaitingFinalDrawingChange
     }
 
     private func updatePencilAvailability() {
@@ -382,13 +445,13 @@ final class NativePencilWebContainer: UIView, PKCanvasViewDelegate {
     private func captureWorldDrawing() {
         guard !isProgrammaticChange,
               !isLoadingDocument,
-              !isUsingTool,
+              canReplaceCanvasDrawing,
               hasUncapturedChanges else {
             return
         }
 
         let screenStrokes = pencilCanvas.drawing.strokes.filter {
-            !acknowledgedWhileUsingTool.contains(PencilStrokeExporter.stableId(for: $0))
+            !deferredAcknowledgedStrokeIds.contains(PencilStrokeExporter.stableId(for: $0))
         }
         let screenIds = Set(screenStrokes.map { PencilStrokeExporter.stableId(for: $0) })
         let worldIds = Set(worldDrawing.strokes.map { PencilStrokeExporter.stableId(for: $0) })
@@ -421,6 +484,7 @@ final class NativePencilWebContainer: UIView, PKCanvasViewDelegate {
               inFlightPublish == nil else {
             return
         }
+        guard !manualPublishQueued || canReplaceCanvasDrawing else { return }
 
         let pendingCount = worldDrawing.strokes.count
         guard pendingCount > 0 || manualPublishQueued else { return }
