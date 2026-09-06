@@ -8,7 +8,7 @@ import { getLocalStores } from "@/features/local-stores"
 
 
 /** Encode a Blob as a base64 data URL. */
-const blobToDataUrl = (blob: Blob): Promise<string> =>
+export const blobToDataUrl = (blob: Blob): Promise<string> =>
   new Promise((resolve, reject) => {
     const reader = new FileReader()
     reader.onload = () => resolve(reader.result as string)

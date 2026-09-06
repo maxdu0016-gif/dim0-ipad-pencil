@@ -13,7 +13,10 @@ final class Dim0WebAppModel: ObservableObject {
     func loadApp() {
         errorMessage = nil
         isLoading = true
-        webView?.load(URLRequest(url: Dim0WebAppConfiguration.appURL))
+        guard let webView else { return }
+        if !OfflineWebBootstrap.load(into: webView) {
+            webView.load(URLRequest(url: Dim0WebAppConfiguration.appURL))
+        }
     }
 
     /// Reflects the web view's initial-page loading state in the SwiftUI shell.

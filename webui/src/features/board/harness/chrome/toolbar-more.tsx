@@ -1,4 +1,6 @@
 import { CursorClickIcon } from "@phosphor-icons/react"
+import { useState } from "react"
+import { PairingDialog } from "@/features/board/lan/pairing-dialog"
 import { useCanvasStore } from "@canvas-harness/react"
 
 import {
@@ -142,6 +144,7 @@ export function HarnessToolbarMore({
   // chat attach button); synced boards keep the legacy server dialog.
   const upload = useLocalDocUpload(boardId)
   const localUpload = local && !!boardId
+  const [pairingOpen, setPairingOpen] = useState(false)
 
   const openImageSearch = chromeDialog === "image-search"
   const openIconSearch = chromeDialog === "icon-search"
@@ -177,10 +180,12 @@ export function HarnessToolbarMore({
           className="min-w-[190px]"
         >
           <MoreMenuItems localUpload={localUpload} upload={upload} />
+          {localUpload && <DropdownMenuItem className="min-h-11" onSelect={() => setPairingOpen(true)}>局域网配对</DropdownMenuItem>}
         </DropdownMenuContent>
       </DropdownMenu>
 
       {localUpload && upload.elements}
+      {localUpload && <PairingDialog boardId={boardId} open={pairingOpen} onOpenChange={setPairingOpen} />}
 
       <ImageSearchDialog
         open={openImageSearch}

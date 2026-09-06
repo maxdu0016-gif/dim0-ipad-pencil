@@ -47,3 +47,5 @@ ios-native/ios/Pods/
 ios-native/ios/.derived-data/
 ios-native/node_modules/
 ios-native/builds/
+ios-native/offline-build/
+ios-native/Dim0Native/Resources/offline-app.html

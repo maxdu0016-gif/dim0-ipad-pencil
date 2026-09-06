@@ -81,6 +81,11 @@ export function useEnableSync() {
       inFlight.current.add(boardId)
       setPendingId(boardId)
       const stores = await getLocalStores()
+      if ((await stores.boards.getBoard(boardId))?.lanRoom) {
+        const error = new Error("请先解除这张画布的局域网配对，再启用云端同步。")
+        toast.error(error.message)
+        return { ok: false, reason: "error", error }
+      }
       const persistence = new BoardPersistence(boardId, { engine: stores.engine })
       try {
         const result = await enableSync(boardId, {

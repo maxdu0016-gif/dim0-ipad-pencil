@@ -5,6 +5,7 @@ use tauri::Manager;
 mod oauth;
 mod shell;
 mod storage;
+mod lan;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -23,6 +24,7 @@ pub fn run() {
       std::fs::create_dir_all(&dir).expect("create app data dir");
       let conn = storage::open(&dir.join("dim0.db")).expect("open dim0.db");
       app.manage(storage::Db(Mutex::new(conn)));
+      app.manage(lan::Lan::default());
 
       if cfg!(debug_assertions) {
         app.handle().plugin(
@@ -38,7 +40,8 @@ pub fn run() {
       storage::sql_select,
       storage::sql_tx,
       oauth::google_oauth,
-      shell::open_external
+      shell::open_external,
+      lan::lan_command
     ])
     .run(tauri::generate_context!())
     .expect("error while running tauri application");

@@ -29,6 +29,20 @@ jobs:
       - name: Install XcodeGen
         run: brew install xcodegen
 
+      - name: Set up Node for bundled offline app
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: webui/package-lock.json
+
+      - name: Bundle offline app
+        working-directory: webui
+        run: |
+          npm ci
+          npx vite build --config vite.ios-offline.config.ts
+          node ../ios-native/scripts/package-offline-web.ts
+
       - name: Generate Xcode project
         run: xcodegen generate
 
@@ -36,6 +50,7 @@ jobs:
         run: |
           grep -q "Dim0WebAppScreen.swift" Dim0Native.xcodeproj/project.pbxproj
           grep -q "NativePencilWebContainer.swift" Dim0Native.xcodeproj/project.pbxproj
+          grep -q "offline-app.html" Dim0Native.xcodeproj/project.pbxproj
 
       - name: Export generated Xcode project
         uses: actions/upload-artifact@v4

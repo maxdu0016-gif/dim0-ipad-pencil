@@ -3,7 +3,10 @@ import { useNavigate } from "@tanstack/react-router"
 import { LocalBoardUrl } from "@/routes"
 import { isTauri } from "@/platform"
 import { useQueryClient } from "@tanstack/react-query"
-import { hitTestAny, type CanvasStore, type NodeId, type Renderer } from "@canvas-harness/core"
+import { asClientId, hitTestAny, type NodeId, type Renderer } from "@canvas-harness/core"
+import { attachLanBoard } from "@/features/board/lan/attach-lan"
+import { readLanBinding, setLanStatus, useLanBinding } from "@/features/board/lan/native"
+import { setBoardSyncRef } from "../sync/board-sync-ref"
 import { createDefaultNote } from "@/features/board/types/note"
 import { noteToNode } from "../convert/note-to-node"
 import { applyStyleMemory } from "./use-create-handlers"
@@ -111,12 +114,12 @@ export function HarnessCanvas({ local = false }: { local?: boolean } = {}) {
   const setBoardRole = useBoardAppStore((s) => s.setBoardRole)
   const setBoardLabel = useBoardAppStore((s) => s.setBoardLabel)
   const setBoardVisibility = useBoardAppStore((s) => s.setBoardVisibility)
+  const lanBindingKey = JSON.stringify(useLanBinding(local ? boardId : null))
 
-  const storeRef = useRef<CanvasStore | null>(null)
-  if (!storeRef.current) {
-    storeRef.current = createBoardStore({ nodeTypes: [...boardNodeTypes] })
-  }
-  const store = storeRef.current
+  const store = useMemo(() => {
+    const binding = local ? readLanBinding(boardId) : null
+    return createBoardStore({ nodeTypes: [...boardNodeTypes], clientId: binding ? asClientId(binding.clientId) : undefined })
+  }, [boardId, local])
 
   const tool = useBoardAppStore((s) => s.tool)
   const inkColor = useBoardAppStore((s) => s.inkColor)
@@ -407,12 +410,23 @@ export function HarnessCanvas({ local = false }: { local?: boolean } = {}) {
           setBoardPersistenceRef(persistence)
           return persistence.load()
         })
-        .then((content) => {
+        .then(async (content) => {
           if (cancelled || !content || !persistence) return
+          const stores = await getLocalStores()
+          if (cancelled) return
           // Project only the current layer into the store (root layer when null);
           // persistence stays whole-board, so other layers are never dropped.
           applyContentToStore(store, content, rootId ?? null)
-          detach = persistence.attach(store)
+          const binding = readLanBinding(boardId)
+          if (binding) {
+            if (store.clientId !== binding.clientId) throw new Error("请重新打开画布以恢复配对身份")
+            const handle = await attachLanBoard({ boardId, store, content, persistence, engine: stores.engine, rootId: rootId ?? null, binding,
+              onState: (state, error) => setLanStatus(boardId, state === "connected" ? "已连接" : `等待重连：${error ?? "电脑暂时不可达"}`),
+            })
+            if (cancelled) { handle.detach(); return }
+            setBoardSyncRef(handle)
+            detach = () => { handle.detach(); setBoardSyncRef(null) }
+          } else detach = persistence.attach(store)
           setCanEdit(true)
           setBoardRole("owner")
           setBoardVisibility("private")
@@ -459,7 +473,7 @@ export function HarnessCanvas({ local = false }: { local?: boolean } = {}) {
     return () => {
       cancelled = true
     }
-  }, [boardId, rootId, store, local, v2, syncEngine, setIsLoading, setCanEdit, setBoardRole, setBoardLabel, setBoardVisibility])
+  }, [boardId, rootId, store, local, v2, syncEngine, lanBindingKey, setIsLoading, setCanEdit, setBoardRole, setBoardLabel, setBoardVisibility])
 
   return (
     <CanvasProvider store={store}>

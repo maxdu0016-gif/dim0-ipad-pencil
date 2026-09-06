@@ -1,5 +1,5 @@
 import { createCanvasStore, defineNode } from "@canvas-harness/core"
-import type { CanvasStore } from "@canvas-harness/core"
+import type { CanvasStore, ClientId } from "@canvas-harness/core"
 import { generateUuid } from "@/lib/common"
 
 
@@ -8,6 +8,7 @@ export type BoardNodeTypeDef = ReturnType<typeof defineNode>
 
 
 export type CreateBoardStoreOptions = {
+  clientId?: ClientId
   /** Custom node defs registered with the canvas store. Phase 3 populates this with sheet / code-sandbox / widget / etc. */
   nodeTypes?: BoardNodeTypeDef[]
 }
@@ -29,6 +30,7 @@ export type CreateBoardStoreOptions = {
  */
 export const createBoardStore = (opts: CreateBoardStoreOptions = {}): CanvasStore =>
   createCanvasStore({
+    clientId: opts.clientId,
     nodeTypes: opts.nodeTypes ?? [],
     idGenerator: generateUuid,
   })

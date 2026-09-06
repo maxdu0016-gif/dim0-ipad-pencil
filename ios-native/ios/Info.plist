@@ -31,7 +31,9 @@
         <string>_dim0sync._tcp</string>
     </array>
     <key>NSLocalNetworkUsageDescription</key>
-    <string>用于连接同一 Wi-Fi 中自行托管的 Dim0 服务。</string>
+    <string>用于扫码连接同一 Wi-Fi 或热点中的 Dim0 电脑端，离线同步画布。</string>
+    <key>NSCameraUsageDescription</key>
+    <string>用于扫描 Dim0 电脑端显示的离线配对二维码。</string>
     <key>NSAppTransportSecurity</key>
     <dict>
         <key>NSAllowsLocalNetworking</key>

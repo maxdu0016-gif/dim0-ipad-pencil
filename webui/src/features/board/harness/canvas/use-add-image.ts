@@ -5,6 +5,8 @@ import { uploadImage } from "@/features/board/api/upload-image"
 import { downscaleImage } from "@/features/board/components/flow/utils/downscale-image"
 import { createDefaultNote } from "@/features/board/types/note"
 import { noteToNode } from "../convert/note-to-node"
+import { getLocalStores } from "@/features/local-stores"
+import { blobToDataUrl } from "@/features/board/local/save-local-thumbnail"
 
 
 const IMAGE_NODE_MAX_DIMENSION = 420
@@ -67,7 +69,10 @@ export const useHarnessAddImage = (
         const { blob, width, height, mimeType } = await downscaleImage(file)
         const ext = mimeType === "image/png" ? "png" : "jpg"
         const base = file.name?.replace(/\.[^.]+$/, "") || "image"
-        const { dataUrl } = await uploadImage(blob, `${base}.${ext}`)
+        const meta = await (await getLocalStores()).boards.getBoard(boardId)
+        const dataUrl = meta?.kind === "local-only"
+          ? await blobToDataUrl(blob)
+          : (await uploadImage(blob, `${base}.${ext}`)).dataUrl
         const size = nodeSizeFromImage(width, height)
 
         const center = options.position

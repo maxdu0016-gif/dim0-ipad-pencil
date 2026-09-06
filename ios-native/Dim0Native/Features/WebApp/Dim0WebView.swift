@@ -17,8 +17,11 @@ struct Dim0WebView: UIViewRepresentable {
         configuration.defaultWebpagePreferences.allowsContentJavaScript = true
         configuration.userContentController.addUserScript(Self.nativeBootstrapScript())
         configuration.userContentController.add(context.coordinator, name: "dim0NativePencil")
+        let pairing = LocalPairingBridge()
+        configuration.userContentController.addScriptMessageHandler(pairing, contentWorld: .page, name: "dim0Lan")
 
         let webView = PencilAwareWebView(frame: .zero, configuration: configuration)
+        pairing.webView = webView
         webView.navigationDelegate = context.coordinator
         webView.uiDelegate = context.coordinator
         webView.allowsBackForwardNavigationGestures = true

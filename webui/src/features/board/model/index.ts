@@ -177,6 +177,8 @@ export type BoardMeta = {
   // coordinator. Ignored for `local-only` boards. Transient migration field:
   // removed once every synced board is v2 and the legacy client is retired.
   syncEngine?: "legacy" | "v2"
+  /** Local relay identity; prevents accidentally attaching a second cloud sequencer. */
+  lanRoom?: string
   ownerId?: Id
   acl?: Record<Id, BoardRole>
   visibility: "private" | "shared" | "public"

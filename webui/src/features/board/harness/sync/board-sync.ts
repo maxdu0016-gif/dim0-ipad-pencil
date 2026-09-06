@@ -50,6 +50,9 @@ export type BoardSyncOptions = {
   engine: StorageEngine
   boardId: string
   clientId: ClientId
+  /** Resume a durable whole-board replica without replaying history over newer confirmed edits. */
+  initialServerSeq?: number
+  initialPending?: OpBatch[]
   /**
    * Opens a fresh connection to the relay (called on attach + each reconnect).
    * `sinceSeq` is the highest relay seq seen so far — passed at connect time
@@ -120,7 +123,7 @@ export const attachBoardSync = (opts: BoardSyncOptions): BoardSyncHandle => {
 
   let connection: RelayConnection | null = null
   let clientSeq = 0
-  let lastServerSeq = 0
+  let lastServerSeq = opts.initialServerSeq ?? 0
   let coalesceTimer: ReturnType<typeof setTimeout> | null = null
   // client_seq → the oplog seqs + batch ids that send covered. Coalescing sends
   // ONE message for many records, so a single ack advances the cursor over all
@@ -130,7 +133,7 @@ export const attachBoardSync = (opts: BoardSyncOptions): BoardSyncHandle => {
   // Unacked local batches, in commit order — the rebase set (applied on top of
   // every remote op so local edits stay "latest"). Keyed by batch id; Map keeps
   // insertion order for undo (reverse) / replay (forward).
-  const pending = new Map<string, OpBatch>()
+  const pending = new Map<string, OpBatch>((opts.initialPending ?? []).map((batch) => [batch.id, batch]))
 
   // Serialize async work so `settle()` can await a quiescent state in tests.
   let work: Promise<void> = Promise.resolve()
