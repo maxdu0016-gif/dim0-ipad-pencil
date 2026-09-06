@@ -415,6 +415,7 @@ export function HarnessCanvas({ local = false }: { local?: boolean } = {}) {
         .then(async (content) => {
           if (cancelled || !content || !persistence) return
           const stores = await getLocalStores()
+          const meta = await stores.boards.getBoard(boardId)
           if (cancelled) return
           // Project only the current layer into the store (root layer when null);
           // persistence stays whole-board, so other layers are never dropped.
@@ -432,6 +433,7 @@ export function HarnessCanvas({ local = false }: { local?: boolean } = {}) {
           setCanEdit(true)
           setBoardRole("owner")
           setBoardVisibility("private")
+          setBoardLabel(meta?.title ?? "")
           hydrated = true
         })
         .catch((err) => {

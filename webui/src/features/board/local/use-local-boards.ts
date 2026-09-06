@@ -20,6 +20,12 @@ const useLocalBoardsRevision = create<{ rev: number; bump: () => void }>((set) =
 }))
 
 
+/** Refresh every local-board list after an atomic external import. */
+export function notifyLocalBoardsChanged(): void {
+  useLocalBoardsRevision.getState().bump()
+}
+
+
 /** List/create/delete/rename local-only boards via the shared BoardRegistry — offline, no account. */
 export function useLocalBoards() {
   const [boards, setBoards] = useState<BoardMeta[]>([])

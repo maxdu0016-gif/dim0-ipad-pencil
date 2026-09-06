@@ -7,6 +7,25 @@ import type { InboundMessage, OutboundMessage } from "./wire"
 afterEach(() => vi.useRealTimers())
 
 
+it("sends a large offline image queue in bounded requests without dropping later edits", async () => {
+  vi.useFakeTimers()
+  const payload = "x".repeat(10 * 1024 * 1024)
+  const exchange = vi.fn(async (_since: number, messages: OutboundMessage[]) => ({
+    cursor: 3, latest: 3,
+    messages: messages.flatMap((m) => m.kind === "op" ? [{ kind: "op-applied" as const, seq: m.client_seq, client_seq: m.client_seq }] : []),
+  }))
+  const relay = createLanRelay({ sinceSeq: 0, exchange, onState: vi.fn() })
+  for (let id = 1; id <= 3; id++) relay.send({ kind: "op", client_seq: id, batch: {
+    id: asBatchId(String(id)), clientId: asClientId("ipad"), ts: id, origin: "local",
+    ops: [{ type: "node.update", id: asNodeId("image"), patch: { data: { payload } }, prev: {} }],
+  } })
+  relay.onMessage(() => {})
+  await vi.advanceTimersByTimeAsync(401)
+  expect(exchange.mock.calls.map((call) => call[1].length)).toEqual([2, 1])
+  relay.close()
+})
+
+
 it("retries an unacknowledged edit and preserves relay order before notifying readiness", async () => {
   vi.useFakeTimers()
   const edit: OutboundMessage = {

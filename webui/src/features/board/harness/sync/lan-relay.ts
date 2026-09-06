@@ -29,7 +29,17 @@ export function createLanRelay(opts: Options): RelayConnection {
     if (closed || !listener) return
     let delay = opts.intervalMs ?? 400
     try {
-      const response = await opts.exchange(cursor, [...outgoing.values()].slice(0, 100))
+      // Several image edits can exceed the native HTTP limit even when each edit fits individually.
+      const sending: OutboundMessage[] = []
+      let bytes = 0
+      for (const message of outgoing.values()) {
+        const size = new TextEncoder().encode(JSON.stringify(message)).byteLength
+        if (size > 24 * 1024 * 1024) throw new Error("单次修改过大，请缩小图片后重试")
+        if (sending.length === 100 || bytes + size > 24 * 1024 * 1024) break
+        sending.push(message)
+        bytes += size
+      }
+      const response = await opts.exchange(cursor, sending)
       if (closed) return
       if (!Number.isSafeInteger(response.cursor) || response.cursor < cursor
         || !Number.isSafeInteger(response.latest) || response.latest < response.cursor

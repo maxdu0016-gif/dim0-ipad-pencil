@@ -7,6 +7,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Button } from "@/components/ui/button"
 import { getLocalStores } from "@/features/local-stores"
 import { getBoardPersistenceRef } from "@/features/board/persist/local/board-persistence-ref"
+import { notifyLocalBoardsChanged } from "@/features/board/local/use-local-boards"
 import { getBoardSyncRef } from "../harness/sync/board-sync-ref"
 import { captureLanSeed, importLanSeed, type LanSeed } from "./seed"
 import { lanCommand, saveLanBinding, updateHostAddress, useLanBinding, useLanStatus, type LanBinding } from "./native"
@@ -107,6 +108,7 @@ export function PairingDialog({ boardId, open, onOpenChange }: { boardId: string
     await getBoardPersistenceRef()?.flush()
     const stores = await getLocalStores()
     await importLanSeed(stores.engine, seed, pending.room)
+    notifyLocalBoardsChanged()
     saveLanBinding(seed.boardId, pending)
     setPending(null)
     onOpenChange(false)

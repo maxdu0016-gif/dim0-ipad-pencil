@@ -104,9 +104,14 @@ Changed-IP recovery now reuses a board's Keychain identity after rescanning its
 new address. Initial image transfer embeds retrievable bytes and stops with an
 actionable error for missing media instead of claiming successful offline transfer.
 
+Native CI passed 15 tests on commit `49e99dca`, including a simulated HTTPS
+reload retaining existing IndexedDB content. This is simulator validation, not
+physical iPad acceptance. The offline browser smoke test also covers importing
+through a mocked native bridge and opening the board without a website request.
+
 Release blockers still requiring implementation/verification: ongoing document/widget-state synchronization
 after the initial import; external media referenced inside rich document content;
-native CI and actual Windows/iPad offline acceptance. Initial transfer currently
+actual Windows/iPad offline acceptance. Initial transfer currently
 uses bounded JSON (32 MB), with whole-request retries, and has no chunked transfer
 progress. AI/OCR and embedded mini-app services retain their existing internet
 requirements. Existing native Pencil durability is reused, not independently
