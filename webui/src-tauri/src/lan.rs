@@ -23,7 +23,10 @@ pub fn lan_command(
         *guard = None;
         return Ok(json!({}));
     }
-    if action == "start" {
+    if action == "start" || action == "restart" {
+        if action == "restart" {
+            *guard = None;
+        }
         if guard.is_none() {
             let dir = app
                 .path()
@@ -36,6 +39,13 @@ pub fn lan_command(
             *guard = Some(server::start(&dir, address)?);
         }
         let server = guard.as_ref().ok_or("Local service unavailable")?;
+        let requested = body["address"].as_str().unwrap_or("");
+        if !server
+            .endpoint
+            .starts_with(&format!("https://{requested}:"))
+        {
+            return Err("Local service uses another address; reopen pairing settings".into());
+        }
         return Ok(json!({"endpoint":server.endpoint,"fingerprint":server.fingerprint}));
     }
     let server = guard.as_ref().ok_or("Start the local service first")?;
@@ -48,7 +58,7 @@ pub fn lan_command(
             .map(|r| json!({"room":r})),
         "invite" => {
             let token = server.relay.invite(room, now())?;
-            let invitation = json!({"version":1,"endpoint":server.endpoint,"fingerprint":server.fingerprint,"invite":token,"expires":now()+600}).to_string();
+            let invitation = json!({"version":1,"room":room,"endpoint":server.endpoint,"fingerprint":server.fingerprint,"invite":token,"expires":now()+600}).to_string();
             let svg = dim0_lan_relay::qr_svg(&invitation)?;
             Ok(json!({"invitation":invitation,"svg":svg}))
         }

@@ -142,6 +142,7 @@ final class LocalPairingBridge: NSObject, WKScriptMessageHandlerWithReply {
                   invite["version"] as? Int == 1, let address = invite["endpoint"] as? String, Self.endpoint(address) != nil,
                   let fingerprint = invite["fingerprint"] as? String, fingerprint.count == 64,
                   fingerprint.allSatisfy({ $0.isHexDigit }), let token = invite["invite"] as? String, token.count == 64, token.allSatisfy({ $0.isHexDigit }),
+                  let invitedRoom = invite["room"] as? String, invitedRoom.count == 64, invitedRoom.allSatisfy({ $0.isHexDigit }),
                   let expires = invite["expires"] as? Double, expires > Date().timeIntervalSince1970 else {
                 throw failure("配对码无效或已过期，请在电脑上重新生成。")
             }
@@ -149,15 +150,17 @@ final class LocalPairingBridge: NSObject, WKScriptMessageHandlerWithReply {
             guard SecRandomCopyBytes(kSecRandomDefault, bytes.count, &bytes) == errSecSuccess else { throw failure("Random generator unavailable") }
             let deviceToken = bytes.map { String(format: "%02x", $0) }.joined()
             // Persist before sending: a lost claim response must retry with the same device credential.
-            let id = SHA256.hash(data: Data("\(address)|\(fingerprint.lowercased())|\(token)".utf8)).map { String(format: "%02x", $0) }.joined()
+            let id = SHA256.hash(data: Data("\(fingerprint.lowercased())|\(invitedRoom)".utf8)).map { String(format: "%02x", $0) }.joined()
             let provisional: LocalPairingCredential
-            if let existing = try? load(id) { provisional = existing }
+            if let existing = try? load(id) {
+                provisional = LocalPairingCredential(endpoint: address, fingerprint: existing.fingerprint, token: existing.token, room: existing.room, clientId: existing.clientId)
+            }
             else {
                 provisional = LocalPairingCredential(endpoint: address, fingerprint: fingerprint.lowercased(), token: deviceToken, room: "", clientId: "")
                 try save(provisional, id: id)
             }
             let result = try await request(provisional, path: "claim", body: ["invite": token, "credential": provisional.token, "name": "Dim0 iPad"])
-            guard let room = result["room"] as? String, let clientId = result["clientId"] as? String else { throw failure("Invalid pairing reply") }
+            guard let room = result["room"] as? String, room == invitedRoom, let clientId = result["clientId"] as? String else { throw failure("Invalid pairing reply") }
             try save(LocalPairingCredential(endpoint: address, fingerprint: fingerprint.lowercased(), token: provisional.token, room: room, clientId: clientId), id: id)
             return ["connectionId": id, "room": room, "clientId": clientId, "endpoint": address]
         }

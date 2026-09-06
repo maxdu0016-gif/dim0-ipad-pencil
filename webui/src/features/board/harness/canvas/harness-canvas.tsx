@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useNavigate } from "@tanstack/react-router"
+import { toast } from "sonner"
 import { LocalBoardUrl } from "@/routes"
 import { isTauri } from "@/platform"
 import { useQueryClient } from "@tanstack/react-query"
@@ -400,6 +401,7 @@ export function HarnessCanvas({ local = false }: { local?: boolean } = {}) {
     // Local-only board: load from IndexedDB + attach local persistence. The
     // analog of the backend hydrate below — it fills the same empty store.
     if (local) {
+      let hydrated = false
       let detach: (() => void) | null = null
       let persistence: BoardPersistence | null = null
       void getLocalStores()
@@ -430,14 +432,19 @@ export function HarnessCanvas({ local = false }: { local?: boolean } = {}) {
           setCanEdit(true)
           setBoardRole("owner")
           setBoardVisibility("private")
+          hydrated = true
         })
         .catch((err) => {
-          if (!cancelled) console.error("[harness] local load failed", err)
+          if (!cancelled) {
+            setCanEdit(false)
+            console.error("[harness] local load failed", err)
+            toast.error("画布未能安全加载，请重新打开后再编辑。")
+          }
         })
         .finally(() => {
           if (cancelled) return
           setIsLoading(false)
-          setReady(true)
+          setReady(hydrated)
         })
       return () => {
         cancelled = true

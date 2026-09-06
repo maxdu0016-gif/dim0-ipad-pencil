@@ -71,6 +71,17 @@ export function useLanBinding(boardId: string | null): LanBinding | null {
 }
 
 
+/** All hosted boards share one listener; update their device-local addresses together. */
+export function updateHostAddress(endpoint: string, address: string): void {
+  const all = JSON.parse(localStorage.getItem(KEY) ?? "{}") as Record<string, LanBinding>
+  for (const id of Object.keys(all)) {
+    if (all[id].role === "host") all[id] = { ...all[id], endpoint, address }
+  }
+  localStorage.setItem(KEY, JSON.stringify(all))
+  window.dispatchEvent(new Event(CHANGE))
+}
+
+
 const states = new Map<string, string>()
 
 

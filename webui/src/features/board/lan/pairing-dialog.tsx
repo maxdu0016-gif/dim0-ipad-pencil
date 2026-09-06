@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from "react"
 import { useCanvasStore } from "@canvas-harness/react"
+import { useNavigate } from "@tanstack/react-router"
+import { LocalBoardUrl } from "@/routes"
 import { isIOSNative, isTauri } from "@/platform"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
@@ -7,7 +9,7 @@ import { getLocalStores } from "@/features/local-stores"
 import { getBoardPersistenceRef } from "@/features/board/persist/local/board-persistence-ref"
 import { getBoardSyncRef } from "../harness/sync/board-sync-ref"
 import { captureLanSeed, importLanSeed, type LanSeed } from "./seed"
-import { lanCommand, saveLanBinding, useLanBinding, useLanStatus, type LanBinding } from "./native"
+import { lanCommand, saveLanBinding, updateHostAddress, useLanBinding, useLanStatus, type LanBinding } from "./native"
 
 
 type Invitation = { invitation: string; svg: string }
@@ -16,6 +18,7 @@ type Peer = { id: string; name: string; approved: boolean; revoked: boolean }
 
 export function PairingDialog({ boardId, open, onOpenChange }: { boardId: string; open: boolean; onOpenChange: (open: boolean) => void }) {
   const store = useCanvasStore()
+  const navigate = useNavigate()
   const binding = useLanBinding(boardId)
   const status = useLanStatus(boardId)
   const [addresses, setAddresses] = useState<string[]>([])
@@ -29,6 +32,7 @@ export function PairingDialog({ boardId, open, onOpenChange }: { boardId: string
   const active = useRef(false)
   const host = isTauri()
   const room = binding?.room
+  const boundAddress = binding?.address
 
   useEffect(() => {
     if (!open || !host) return
@@ -36,10 +40,10 @@ export function PairingDialog({ boardId, open, onOpenChange }: { boardId: string
     void lanCommand<string[]>("addresses").then((list) => {
       if (cancelled) return
       setAddresses(list)
-      setAddress((previous) => previous || list[0] || "")
+      setAddress((previous) => list.includes(previous) ? previous : boundAddress && list.includes(boundAddress) ? boundAddress : list[0] || "")
     }).catch((e: unknown) => { if (!cancelled) setError(String(e)) })
     return () => { cancelled = true }
-  }, [open, host])
+  }, [open, host, boundAddress])
 
   useEffect(() => {
     if (!open || !host || !room) return
@@ -66,7 +70,8 @@ export function PairingDialog({ boardId, open, onOpenChange }: { boardId: string
   }
 
   const invite = async (): Promise<void> => {
-    const server = await lanCommand<{ endpoint: string }>("start", { address: binding?.address ?? address })
+    const server = await lanCommand<{ endpoint: string }>(binding && address !== binding.address ? "restart" : "start", { address })
+    if (binding && address !== binding.address) updateHostAddress(server.endpoint, address)
     let current = binding
     if (!current) {
       const persistence = getBoardPersistenceRef()
@@ -98,12 +103,14 @@ export function PairingDialog({ boardId, open, onOpenChange }: { boardId: string
   const finishJoin = async (): Promise<void> => {
     if (!pending) return
     const { seed } = await lanCommand<{ seed: LanSeed }>("bootstrap", pending)
+    await getBoardSyncRef()?.settle()
+    await getBoardPersistenceRef()?.flush()
     const stores = await getLocalStores()
     await importLanSeed(stores.engine, seed, pending.room)
     saveLanBinding(seed.boardId, pending)
-    await getBoardSyncRef()?.settle()
-    await getBoardPersistenceRef()?.flush()
-    window.location.assign(`/local/${encodeURIComponent(seed.boardId)}`)
+    setPending(null)
+    onOpenChange(false)
+    await navigate({ to: LocalBoardUrl, params: { boardId: seed.boardId }, search: {} })
   }
 
   const unpair = async (): Promise<void> => {
@@ -151,11 +158,12 @@ export function PairingDialog({ boardId, open, onOpenChange }: { boardId: string
         <Button variant="outline" disabled={busy} onClick={() => void run(unpair)}>解除配对并保留本地副本</Button>
       </>}
       {host && <>
-        {!binding && <label className="grid gap-2">电脑 Wi-Fi 地址
+        <label className="grid gap-2">电脑 Wi-Fi 地址
           <select className="rounded border p-2" value={address} onChange={(e) => setAddress(e.target.value)}>
             {addresses.map((ip) => <option key={ip}>{ip}</option>)}
           </select>
-        </label>}
+        </label>
+        {binding && <p className="text-sm">更换 Wi-Fi 地址后，重新生成配对码并在 iPad 扫码确认，原画布和未发送修改会保留。</p>}
         <Button disabled={busy || binding?.retiring || (!binding && !address)} onClick={() => void run(invite)}>{invitation ? "重新生成配对码" : "生成配对码"}</Button>
         {invitation && <>
           <img className="mx-auto w-64 bg-white p-2" alt="iPad 配对二维码" src={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(invitation.svg)}`} />

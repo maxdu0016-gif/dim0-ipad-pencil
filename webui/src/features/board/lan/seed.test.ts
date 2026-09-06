@@ -1,8 +1,28 @@
-import { expect, it } from "vitest"
+import { expect, it, vi } from "vitest"
+import { asNodeId } from "@canvas-harness/core"
+import { addNode, freshStore } from "@/test/canvas"
 import { InMemoryEngine } from "@/features/board/persist/local/in-memory-engine"
-import { emptyContent } from "@/features/board/persist/local/codec"
+import { emptyContent, readContent } from "@/features/board/persist/local/codec"
 import { newLocalBoard } from "@/features/board/persist/local/board-registry"
 import { captureLanSeed, importLanSeed } from "./seed"
+
+
+it("embeds available images and rejects missing bytes instead of reporting a complete offline package", async () => {
+  const engine = new InMemoryEngine()
+  const store = freshStore()
+  addNode(store, "image")
+  store.updateNode(asNodeId("image"), { data: { src: "https://example.com/image.png" } })
+  const source = readContent(store)
+  const fetcher = vi.fn().mockResolvedValue({ ok: true, blob: async () => new Blob(["image"], { type: "image/png" }) })
+  vi.stubGlobal("fetch", fetcher)
+  try {
+    const seed = await captureLanSeed(engine, newLocalBoard("Images", 1), source, 0)
+    expect(seed.content.nodes[0].data?.src).toMatch(/^data:image\/png;base64,/)
+    expect(source.nodes[0].data?.src).toBe("https://example.com/image.png")
+    fetcher.mockRejectedValue(new Error("Offline"))
+    await expect(captureLanSeed(engine, newLocalBoard("Images", 1), source, 0)).rejects.toThrow("部分图片")
+  } finally { vi.unstubAllGlobals() }
+})
 
 
 it("imports attachments atomically and never overwrites an independent board", async () => {

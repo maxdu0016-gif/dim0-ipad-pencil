@@ -93,6 +93,7 @@ pub fn start(dir: &Path, address: &str) -> Result<Running> {
         .unwrap_or(0);
     let listener =
         TcpListener::bind((ip, port)).map_err(|e| format!("Cannot open LAN port: {e}"))?;
+    listener.set_nonblocking(true).map_err(|e| e.to_string())?;
     let actual_port = listener.local_addr().map_err(|e| e.to_string())?.port();
     std::fs::write(port_file, actual_port.to_string()).map_err(|e| e.to_string())?;
     let relay = Arc::new(Relay::open(&dir.join("relay.db"))?);
@@ -110,13 +111,18 @@ pub fn start(dir: &Path, address: &str) -> Result<Running> {
     let tls = runtime
         .block_on(RustlsConfig::from_pem(cert.into_bytes(), key.into_bytes()))
         .map_err(|e| e.to_string())?;
+    let server = {
+        let _entered = runtime.enter();
+        axum_server::from_tcp_rustls(listener, tls).map_err(|e| e.to_string())?
+    };
     std::thread::spawn(move || {
         runtime.block_on(async move {
-            if let Ok(server) = axum_server::from_tcp_rustls(listener, tls) {
-                let _ = server
-                    .handle(server_handle)
-                    .serve(router.into_make_service())
-                    .await;
+            if let Err(error) = server
+                .handle(server_handle)
+                .serve(router.into_make_service())
+                .await
+            {
+                eprintln!("Dim0 local relay stopped: {error}");
             }
         });
     });

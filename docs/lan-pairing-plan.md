@@ -93,14 +93,19 @@ TLS transport, pause/unpair with local-copy retention, retrying outbox, whole-bo
 projection, initial document/widget-state import, local image insertion, and
 a bundled offline HTML shell using the existing HTTPS storage origin.
 
-Verified locally: 34 frontend synchronization/import tests; five Rust journal
-and authorization tests; Tauri library compilation; TypeScript and ESLint;
+Verified locally: frontend synchronization/import tests; five Rust journal
+and authorization tests; real private-interface HTTPS approval/revocation and
+certificate rejection; Tauri library compilation; TypeScript and ESLint;
 offline Vite build; browser startup, local board creation and pairing dialog
 with all non-navigation network requests blocked. These do not establish native
 iPad camera, TLS, local-network permission or migration correctness.
 
-Release blockers still requiring implementation/verification: changed-IP recovery; ongoing document/widget-state synchronization
-after the initial import; validation of external attachment availability;
+Changed-IP recovery now reuses a board's Keychain identity after rescanning its
+new address. Initial image transfer embeds retrievable bytes and stops with an
+actionable error for missing media instead of claiming successful offline transfer.
+
+Release blockers still requiring implementation/verification: ongoing document/widget-state synchronization
+after the initial import; external media referenced inside rich document content;
 native CI and actual Windows/iPad offline acceptance. Initial transfer currently
 uses bounded JSON (32 MB), with whole-request retries, and has no chunked transfer
 progress. AI/OCR and embedded mini-app services retain their existing internet

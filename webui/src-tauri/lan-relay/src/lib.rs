@@ -148,6 +148,13 @@ impl Relay {
             params![device, room, device, name],
         )
         .map_err(err)?;
+        if claimant.is_none() {
+            tx.execute(
+                "UPDATE peers SET approved=0,revoked=0 WHERE hash=? AND room=?",
+                params![device, room],
+            )
+            .map_err(err)?;
+        }
         tx.execute(
             "UPDATE invites SET claimant=? WHERE hash=?",
             params![device, hash(invite)],

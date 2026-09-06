@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest"
+import { describe, expect, it, vi } from "vitest"
 import { asBatchId, asClientId, asNodeId, type Node, type OpBatch } from "@canvas-harness/core"
 import type { CanvasStore } from "@canvas-harness/core"
 import { makeBatch } from "@/features/board/harness/make-batch"
@@ -56,8 +56,22 @@ const makeControlled = (
     onWelcome: opts.onWelcome,
     normalizeRemote: opts.normalizeRemote,
   })
-  return { store, sync, push: (m: InboundMessage) => state.deliver?.(m), get closed() { return state.closed } }
+  return { store, sync, persistence, engine, push: (m: InboundMessage) => state.deliver?.(m), get closed() { return state.closed } }
 }
+
+
+it("keeps an edit retryable if persisting its acknowledged relay order fails", async () => {
+  const client = makeControlled("desktop")
+  addNode(client.store, "node")
+  await client.sync.settle()
+  const stamp = vi.spyOn(client.persistence, "setServerSeq").mockRejectedValueOnce(new Error("Storage unavailable"))
+  client.push({ kind: "op-applied", client_seq: 1, seq: 1 })
+  await expect(client.sync.settle()).rejects.toThrow("Storage unavailable")
+  expect(await new BoardOutbox(client.engine, BOARD).pending()).toHaveLength(1)
+  stamp.mockRestore()
+  client.sync.detach()
+  client.persistence.close()
+})
 
 
 /** A full offline-first client: own engine (replica) + persistence + store + sync. */

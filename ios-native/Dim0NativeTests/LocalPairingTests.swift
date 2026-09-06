@@ -25,8 +25,8 @@ final class LocalPairingTests: XCTestCase {
         view.navigationDelegate = first
         view.loadSimulatedRequest(request, responseHTML: "<html><body>First</body></html>")
         await fulfillment(of: [first.loaded], timeout: 15)
-        _ = try await view.evaluateJavaScript("localStorage.setItem('offline-origin-test', 'saved'); location.origin")
-        _ = try await view.callAsyncJavaScript("""
+        _ = try await runScript(view, "localStorage.setItem('offline-origin-test', 'saved'); return location.origin")
+        _ = try await runScript(view, """
             const db = await new Promise((resolve, reject) => {
               const r = indexedDB.open('offline-origin-test', 1);
               r.onupgradeneeded = () => r.result.createObjectStore('boards');
@@ -36,14 +36,14 @@ final class LocalPairingTests: XCTestCase {
             tx.objectStore('boards').put({title: 'Existing drawing'}, 'old-board');
             await new Promise((resolve, reject) => { tx.oncomplete = resolve; tx.onerror = () => reject(tx.error); });
             db.close(); return true;
-            """, arguments: [:], in: nil, contentWorld: .page)
+            """)
         let next = NavigationWaiter()
         view.navigationDelegate = next
         view.loadSimulatedRequest(request, responseHTML: "<html><body>Offline</body></html>")
         await fulfillment(of: [next.loaded], timeout: 15)
-        let value = try await view.evaluateJavaScript("localStorage.getItem('offline-origin-test')") as? String
+        let value = try await runScript(view, "return localStorage.getItem('offline-origin-test')") as? String
         XCTAssertEqual(value, "saved")
-        let title = try await view.callAsyncJavaScript("""
+        let title = try await runScript(view, """
             const db = await new Promise((resolve, reject) => {
               const r = indexedDB.open('offline-origin-test', 1);
               r.onsuccess = () => resolve(r.result); r.onerror = () => reject(r.error);
@@ -53,10 +53,37 @@ final class LocalPairingTests: XCTestCase {
               r.onsuccess = () => resolve(r.result); r.onerror = () => reject(r.error);
             });
             db.close(); return value.title;
-            """, arguments: [:], in: nil, contentWorld: .page) as? String
+            """) as? String
         XCTAssertEqual(title, "Existing drawing")
-        let origin = try await view.evaluateJavaScript("location.origin") as? String
+        let origin = try await runScript(view, "return location.origin") as? String
         XCTAssertEqual(origin, "https://\(try XCTUnwrap(Dim0WebAppConfiguration.appURL.host))")
+    }
+
+    /// Use the Objective-C message bridge: the simulator lacks the Swift WebKit async overlay dylib.
+    private func runScript(_ view: WKWebView, _ script: String) async throws -> Any? {
+        let receiver = ScriptResultReceiver()
+        view.configuration.userContentController.add(receiver, name: "testResult")
+        defer { view.configuration.userContentController.removeScriptMessageHandler(forName: "testResult") }
+        view.evaluateJavaScript("void (async () => { \(script) })().then(value => window.webkit.messageHandlers.testResult.postMessage({value}), error => window.webkit.messageHandlers.testResult.postMessage({error: String(error)}))") { _, error in
+            if let error { receiver.complete(["error": error.localizedDescription]) }
+        }
+        await fulfillment(of: [receiver.received], timeout: 15)
+        if let error = receiver.result?["error"] as? String { throw NSError(domain: "OfflineTest", code: 1, userInfo: [NSLocalizedDescriptionKey: error]) }
+        return try XCTUnwrap(receiver.result)["value"]
+    }
+}
+
+@MainActor
+private final class ScriptResultReceiver: NSObject, WKScriptMessageHandler {
+    let received = XCTestExpectation(description: "Web script result")
+    var result: [String: Any]?
+    func complete(_ value: [String: Any]) {
+        guard result == nil else { return }
+        result = value
+        received.fulfill()
+    }
+    func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
+        complete(message.body as? [String: Any] ?? ["error": "Invalid test reply"])
     }
 }
 

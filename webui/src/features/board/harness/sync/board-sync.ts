@@ -245,8 +245,9 @@ export const attachBoardSync = (opts: BoardSyncOptions): BoardSyncHandle => {
         if (rec) {
           for (const id of rec.batchIds) pending.delete(id) // acked → no longer rebased on top
           enqueue(async () => {
-            await outbox.markSyncedTo(Math.max(...rec.seqs)) // one ack covers the merged range
             for (const s of rec.seqs) await opts.persistence.setServerSeq(s, msg.seq) // reload replays in relay order
+            // Stamp ordering first: a crash must never discard an un-stamped edit from the retry outbox.
+            await outbox.markSyncedTo(Math.max(...rec.seqs)) // one ack covers the merged range
           })
         }
         break
