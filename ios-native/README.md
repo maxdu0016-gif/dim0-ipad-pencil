@@ -16,6 +16,24 @@ journal. While the pen is active, the native overlay owns board touches so a
 resting palm cannot move the web camera. Erasing uses the web ink eraser, and
 switching away from the pen restores touch pan/zoom.
 
+Build 15 checkpoints the visible drawing on tool-up and again on the final
+drawing callback, without waiting for the idle publish/reconciliation timers.
+Resigning active and entering the background also checkpoint the current overlay,
+including ink still waiting for PencilKit's final callback. Snapshot serialization
+runs off the main actor and disk writes stay ordered. These recovery snapshots do
+not replace the live canvas or release its finalization guard.
+
+The native app supports one window while recovery journals are keyed by board.
+Re-enable multiple scenes only after independent journal writer ownership is
+implemented. The existing journal format remains readable by build 14.
+
+Native regression coverage lives in `NativePencilRecoveryTests.swift`. Run it with
+the existing `iOS native CI` workflow or the Xcode test scheme. Physical iPad
+acceptance is still required: rapid Pencil bursts, immediately locking/closing
+after tool-up, recovery after relaunch, and confirmation that normal writing has
+no new pauses. No software checkpoint can guarantee the sample PencilKit has not
+yet delivered at an abrupt process termination.
+
 ## Application URL
 
 Release builds load the dedicated iPad frontend at

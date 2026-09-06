@@ -42,7 +42,8 @@
     <key>UIApplicationSceneManifest</key>
     <dict>
         <key>UIApplicationSupportsMultipleScenes</key>
-        <true/>
+        <!-- ponytail: one journal writer; enable multiple scenes after per-scene journal ownership exists. -->
+        <false/>
         <key>UISceneConfigurations</key>
         <dict/>
     </dict>

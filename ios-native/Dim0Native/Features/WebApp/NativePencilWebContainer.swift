@@ -53,7 +53,7 @@ final class NativePencilWebContainer: UIView, PKCanvasViewDelegate {
     private var automaticPublish: Task<Void, Never>?
     private var canvasReconciliation: Task<Void, Never>?
     private var pendingSave: Task<Void, Never>?
-    private var saveTask: Task<Void, Never>?
+    private(set) var saveTask: Task<Void, Never>?
     private var saveRevision: UInt64 = 0
     private var backgroundTask = UIBackgroundTaskIdentifier.invalid
     private var loadGeneration = 0
@@ -95,6 +95,12 @@ final class NativePencilWebContainer: UIView, PKCanvasViewDelegate {
         self.sessionId = Self.persistentSessionId()
         super.init(frame: .zero)
         configureViews()
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(persistForBackground),
+            name: UIApplication.willResignActiveNotification,
+            object: nil
+        )
         NotificationCenter.default.addObserver(
             self,
             selector: #selector(persistForBackground),
@@ -251,6 +257,8 @@ final class NativePencilWebContainer: UIView, PKCanvasViewDelegate {
     func canvasViewDidEndUsingTool(_ canvasView: PKCanvasView) {
         isUsingTool = false
         isAwaitingFinalDrawingChange = true
+        // Checkpoint the visible drawing without releasing PencilKit's finalization guard.
+        persistCurrentDocument()
         scheduleFinalDrawingFallback()
     }
 
@@ -313,7 +321,7 @@ final class NativePencilWebContainer: UIView, PKCanvasViewDelegate {
         } else {
             scheduleAutomaticPublish()
         }
-        scheduleSave()
+        persistCurrentDocument()
     }
 
     private func configureViews() {
@@ -524,7 +532,7 @@ final class NativePencilWebContainer: UIView, PKCanvasViewDelegate {
         pencilCanvas.isUserInteractionEnabled = visible && requestedEnabled
     }
 
-    /// Debounces journal serialization until Pencil input is safely idle.
+    /// Debounces acknowledged-ink cleanup; new ink gets an immediate checkpoint instead.
     private func scheduleSave() {
         guard !contextId.isEmpty else { return }
         pendingSave?.cancel()
@@ -535,25 +543,39 @@ final class NativePencilWebContainer: UIView, PKCanvasViewDelegate {
         }
     }
 
+    /// Checkpoints the visible ink without mutating the live drawing or its finalization state.
     private func persistCurrentDocument() {
         guard !contextId.isEmpty, !isLoadingDocument else { return }
-        captureWorldDrawing()
+        let pendingStrokes = pencilCanvas.drawing.strokes.filter {
+            !deferredAcknowledgedStrokeIds.contains(PencilStrokeExporter.stableId(for: $0))
+        }
+        let recoveryDrawing = PKDrawing(strokes: pendingStrokes)
+            .transformed(using: Self.screenToWorldTransform(currentCamera))
+        let pendingIds = Set(pendingStrokes.map { PencilStrokeExporter.stableId(for: $0) })
+        var recoveryColors = strokeColors.filter { pendingIds.contains($0.key) }
+        for stroke in pendingStrokes where recoveryColors[PencilStrokeExporter.stableId(for: stroke)] == nil {
+            recoveryColors[PencilStrokeExporter.stableId(for: stroke)] = storedColor
+        }
         let savedContextId = contextId
-        let document = NativePencilDocument(
-            drawing: worldDrawing.dataRepresentation(),
-            camera: currentCamera,
-            coordinateSpace: requiresLegacyManualSync ? "world-v1" : "pending-world-v1",
-            strokeColors: strokeColors
-        )
+        let savedCamera = currentCamera
+        let coordinateSpace = requiresLegacyManualSync ? "world-v1" : "pending-world-v1"
+        let savedColors = recoveryColors
         saveRevision &+= 1
         let revision = saveRevision
         let priorSave = saveTask
-        saveTask = Task { [documentStore] in
+        // PKDrawing is a Sendable value; serialize its snapshot away from Pencil input.
+        saveTask = Task.detached(priority: .userInitiated) { [documentStore, logger = Self.logger] in
             await priorSave?.value
+            let document = NativePencilDocument(
+                drawing: recoveryDrawing.dataRepresentation(),
+                camera: savedCamera,
+                coordinateSpace: coordinateSpace,
+                strokeColors: savedColors
+            )
             do {
                 try await documentStore.save(document, contextId: savedContextId, revision: revision)
             } catch {
-                Self.logger.error("Unable to save Pencil journal: \(error.localizedDescription, privacy: .public)")
+                logger.error("Unable to save Pencil journal: \(error.localizedDescription, privacy: .public)")
             }
         }
     }
@@ -561,17 +583,22 @@ final class NativePencilWebContainer: UIView, PKCanvasViewDelegate {
     @objc private func persistForBackground() {
         pendingSave?.cancel()
         let application = UIApplication.shared
-        if backgroundTask != .invalid {
-            application.endBackgroundTask(backgroundTask)
-        }
-        backgroundTask = application.beginBackgroundTask { [weak self] in
-            Task { @MainActor in self?.finishBackgroundTask() }
+        if backgroundTask == .invalid {
+            backgroundTask = application.beginBackgroundTask { [weak self] in
+                Task { @MainActor in self?.finishBackgroundTask() }
+            }
         }
         persistCurrentDocument()
-        let currentSave = saveTask
         Task { [weak self] in
-            await currentSave?.value
-            self?.finishBackgroundTask()
+            // Keep background time until all snapshots queued during the transition finish.
+            while let self {
+                let revision = self.saveRevision
+                await self.saveTask?.value
+                if self.saveRevision == revision {
+                    self.finishBackgroundTask()
+                    return
+                }
+            }
         }
     }
 
