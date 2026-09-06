@@ -1,7 +1,7 @@
 import { act } from "react"
 import { createRoot, type Root } from "react-dom/client"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-import { asEdgeId, createCanvasStore, type CanvasStore, type EdgeId } from "@canvas-harness/core"
+import { asEdgeId, asNodeId, createCanvasStore, type CanvasStore, type EdgeId } from "@canvas-harness/core"
 import { CanvasProvider } from "@canvas-harness/react"
 
 import { useBoardAppStore } from "../store/board-app-store"
@@ -157,5 +157,24 @@ describe("HarnessToolbar direct pointer selection", () => {
 
     const settings = container.querySelector<HTMLButtonElement>('button[aria-label="Pen settings"]')
     expect(settings?.className).toContain("size-11")
+  })
+
+  it("deletes a shape and restores it with undo, but hides deletion in read-only mode", () => {
+    const id = asNodeId("shape")
+    act(() => {
+      store.addNode({ id, type: "rect", x: 0, y: 0, w: 100, h: 100, angle: 0, z: 0, groups: [], style: {}, content: "Keep me" })
+      store.setSelection([id])
+    })
+    const remove = container.querySelector<HTMLButtonElement>('button[aria-label="Delete selection"]')
+    expect(remove).not.toBeNull()
+    act(() => remove?.click())
+    expect(store.getNode(id)).toBeUndefined()
+    act(() => store.undo())
+    expect(store.getNode(id)?.content).toBe("Keep me")
+    act(() => {
+      store.setSelection([id])
+      useBoardAppStore.setState({ canEdit: false })
+    })
+    expect(container.querySelector('button[aria-label="Delete selection"]')).toBeNull()
   })
 })

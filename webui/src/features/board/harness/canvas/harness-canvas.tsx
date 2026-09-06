@@ -60,6 +60,7 @@ import { useThemeColorProjection } from "../theme/use-theme-color-projection"
 import { useBoardKeyboard } from "./use-board-keyboard"
 import { useCenterFromUrl } from "./use-center-from-url"
 import { useCreateHandlers } from "./use-create-handlers"
+import { useTouchShapeEdit } from "./use-touch-shape-edit"
 import { useHarnessDropFiles } from "./use-drop-files"
 import { useHydrateIconNodes } from "./use-hydrate-icon-nodes"
 import { usePresentationMode } from "./use-presentation-mode"
@@ -124,6 +125,7 @@ export function HarnessCanvas({ local = false }: { local?: boolean } = {}) {
   const theme = useBoardTheme()
   const [ready, setReady] = useState(false)
   const wrapRef = useRef<HTMLDivElement>(null)
+  useTouchShapeEdit(wrapRef, store)
   // Captured via `<Canvas onRenderer>`; presentation mode toggles
   // `setHideFrames` on this so slide chrome (border + label) drops out
   // and only the contents show.

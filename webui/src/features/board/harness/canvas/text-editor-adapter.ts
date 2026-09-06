@@ -197,11 +197,10 @@ export const createHarnessTextareaEditor: EditorAdapterFactory = ({
   ta.addEventListener("keydown", onKeyDown)
   wrap.appendChild(ta)
   container.appendChild(wrap)
-  requestAnimationFrame(() => {
-    ta.focus()
-    ta.setSelectionRange(ta.value.length, ta.value.length)
-    autosize()
-  })
+  // Keep focus inside the initiating gesture so iPad can open its keyboard.
+  ta.focus()
+  ta.setSelectionRange(ta.value.length, ta.value.length)
+  autosize()
 
   return {
     focus: () => ta.focus(),

@@ -165,12 +165,10 @@ export const useCreateHandlers = (
         type: "size",
         size: { width: e.rect.w, height: e.rect.h },
       }
-      // Auto-select the freshly-created node so the user can
-      // immediately resize / style / move it without round-tripping
-      // through the select tool. Matches tldraw / excalidraw /
-      // figma. Same pattern at every single-node create path.
+      // Leave creation mode so selection gestures and double-tap editing work.
       const id = store.addNode(applyStyleMemory(noteToNode(note), styleMemory))
       store.setSelection([id])
+      useBoardAppStore.getState().setTool("select")
     },
     [store, boardId, rootId, styleMemory, guardCreate],
   )

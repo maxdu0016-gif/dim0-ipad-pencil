@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react"
 import { toast } from "sonner"
-import type { EdgeId } from "@canvas-harness/core"
+import type { EdgeId, NodeId } from "@canvas-harness/core"
 import { useCanvasStore, useSelection } from "@canvas-harness/react"
 import {
   ChevronDownIcon,
@@ -170,10 +170,13 @@ export function HarnessToolbar({ local = false }: { local?: boolean } = {}) {
     ? selectedEdgeIds.length
     : 0
 
-  const removeSelectedEdges = (): void => {
-    if (selectedEdgeCount === 0) return
+  const removeSelection = (): void => {
+    if (!canEdit) return
     store.batch(() => {
-      for (const id of selectedEdgeIds) store.removeEdge(id)
+      for (const id of store.getSelection()) {
+        if (store.getNode(id as NodeId)) store.removeNode(id as NodeId)
+        else if (store.getEdge(id as EdgeId)) store.removeEdge(id as EdgeId)
+      }
     })
     store.setSelection([])
   }
@@ -356,13 +359,15 @@ export function HarnessToolbar({ local = false }: { local?: boolean } = {}) {
         <TooltipContent className={toolbarTooltipClass} side={popupSide} sideOffset={10}>Select</TooltipContent>
       </Tooltip>
 
-      {selectedEdgeCount > 0 && (
+      {canEdit && selection.length > 0 && (
         <Tooltip>
           <TooltipTrigger asChild>
             <button
               type="button"
-              onClick={removeSelectedEdges}
-              aria-label={selectedEdgeCount === 1 ? "Delete selected connector" : "Delete selected connectors"}
+              onClick={removeSelection}
+              aria-label={selectedEdgeCount > 0
+                ? selectedEdgeCount === 1 ? "Delete selected connector" : "Delete selected connectors"
+                : "Delete selection"}
               className={cn(
                 baseButtonClass,
                 "border-destructive/30 text-destructive hover:bg-destructive/10",
@@ -372,7 +377,7 @@ export function HarnessToolbar({ local = false }: { local?: boolean } = {}) {
             </button>
           </TooltipTrigger>
           <TooltipContent className={toolbarTooltipClass} side={popupSide} sideOffset={10}>
-            Delete connector
+            Delete selection
           </TooltipContent>
         </Tooltip>
       )}
