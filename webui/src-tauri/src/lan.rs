@@ -41,6 +41,7 @@ pub fn lan_command(
     let server = guard.as_ref().ok_or("Start the local service first")?;
     let room = body["room"].as_str().unwrap_or("");
     match action.as_str() {
+        "retire" => server.relay.retire(room).map(|_| json!({})),
         "create" => server
             .relay
             .create_room(body["boardId"].as_str().unwrap_or(""), &body["seed"])

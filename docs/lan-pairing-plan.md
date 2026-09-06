@@ -81,8 +81,6 @@ and Wi-Fi client isolation explicitly.
   test before publishing. A browser-only simulation does not establish iPad
   local-network, camera, TLS or cold-launch behavior.
 
-## Rollback baseline
-
 ## Implementation checkpoint — 2026-09-05
 
 Development branch: `codex/offline-lan-pairing`. Local rollback branch:
@@ -91,18 +89,17 @@ not replace the published frontend or TestFlight build 15.
 
 Implemented: board-scoped SQLite journal, native HTTPS relay, expiring QR
 invitations, desktop approval/revocation, iPad Keychain credentials and pinned
-TLS transport, retrying outbox, whole-board synchronization with visible-layer
+TLS transport, pause/unpair with local-copy retention, retrying outbox, whole-board synchronization with visible-layer
 projection, initial document/widget-state import, local image insertion, and
 a bundled offline HTML shell using the existing HTTPS storage origin.
 
-Verified locally: 34 frontend synchronization/import tests; four Rust journal
+Verified locally: 34 frontend synchronization/import tests; five Rust journal
 and authorization tests; Tauri library compilation; TypeScript and ESLint;
 offline Vite build; browser startup, local board creation and pairing dialog
 with all non-navigation network requests blocked. These do not establish native
 iPad camera, TLS, local-network permission or migration correctness.
 
-Release blockers still requiring implementation/verification: complete pause and
-unpair flows; changed-IP recovery; ongoing document/widget-state synchronization
+Release blockers still requiring implementation/verification: changed-IP recovery; ongoing document/widget-state synchronization
 after the initial import; validation of external attachment availability;
 native CI and actual Windows/iPad offline acceptance. Initial transfer currently
 uses bounded JSON (32 MB), with whole-request retries, and has no chunked transfer

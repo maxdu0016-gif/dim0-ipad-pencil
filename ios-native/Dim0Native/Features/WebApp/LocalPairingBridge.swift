@@ -163,6 +163,9 @@ final class LocalPairingBridge: NSObject, WKScriptMessageHandlerWithReply {
         }
         guard let id = body["connectionId"] as? String else { throw failure("Missing pairing") }
         if action == "forget" {
+            if let credential = try? load(id) {
+                _ = try await request(credential, path: "leave", body: [:])
+            }
             SecItemDelete(keyQuery(id) as CFDictionary)
             return ["ok": true]
         }

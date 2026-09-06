@@ -190,6 +190,33 @@ impl Relay {
         .map_err(|_| "Pairing not approved or revoked".into())
     }
 
+    /// A device can revoke only its own credential; this is idempotent even after revocation.
+    pub fn leave(&self, credential: &str) -> Result<()> {
+        let conn = self.0.lock().map_err(|_| "Relay unavailable")?;
+        conn.execute(
+            "UPDATE peers SET approved=0,revoked=1 WHERE hash=?",
+            [hash(credential)],
+        )
+        .map_err(err)?;
+        Ok(())
+    }
+
+    /// Retire a room without destroying its journal. Future pairing starts a new immutable base.
+    pub fn retire(&self, room: &str) -> Result<()> {
+        let mut conn = self.0.lock().map_err(|_| "Relay unavailable")?;
+        let tx = conn.transaction().map_err(err)?;
+        tx.execute("UPDATE peers SET approved=0,revoked=1 WHERE room=?", [room])
+            .map_err(err)?;
+        tx.execute("DELETE FROM invites WHERE room=?", [room])
+            .map_err(err)?;
+        tx.execute(
+            "UPDATE rooms SET board=? WHERE id=?",
+            params![format!("retired:{room}"), room],
+        )
+        .map_err(err)?;
+        tx.commit().map_err(err)
+    }
+
     /// Initial transfer contains the immutable base and every subsequent batch, never a destructive reset.
     pub fn bootstrap(&self, room: &str) -> Result<Value> {
         let conn = self.0.lock().map_err(|_| "Relay unavailable")?;
@@ -519,5 +546,36 @@ mod tests {
         assert!(relay
             .exchange(&room, "desktop", &json!({"since":101,"messages":[changed]}))
             .is_err());
+    }
+
+    #[test]
+    fn unpair_revokes_credentials_and_new_room_preserves_old_journal() {
+        let relay = relay();
+        let room = relay.create_room("board", &seed()).unwrap();
+        let invite = relay.invite(&room, 100).unwrap();
+        let credential = secret().unwrap();
+        let peer = relay.claim(&invite, &credential, "iPad", 101).unwrap();
+        relay
+            .approve(&room, peer["clientId"].as_str().unwrap(), true)
+            .unwrap();
+        relay
+            .exchange(
+                &room,
+                "desktop",
+                &json!({"since":0,"messages":[op("a", "desktop")]}),
+            )
+            .unwrap();
+        relay.leave(&credential).unwrap();
+        relay.leave(&credential).unwrap();
+        assert!(relay.authorize(&credential).is_err());
+        relay.retire(&room).unwrap();
+        assert!(relay.claim(&invite, &credential, "iPad", 102).is_err());
+        assert_ne!(relay.create_room("board", &seed()).unwrap(), room);
+        assert_eq!(
+            relay
+                .exchange(&room, "desktop", &json!({"since":0,"messages":[]}))
+                .unwrap()["latest"],
+            1
+        );
     }
 }

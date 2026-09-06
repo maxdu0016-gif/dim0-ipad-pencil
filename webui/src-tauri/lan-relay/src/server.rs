@@ -100,6 +100,7 @@ pub fn start(dir: &Path, address: &str) -> Result<Running> {
     let server_handle = handle.clone();
     let router = Router::new()
         .route("/v1/claim", post(claim))
+        .route("/v1/leave", post(leave))
         .route("/v1/bootstrap", post(bootstrap))
         .route("/v1/exchange", post(exchange))
         .layer(DefaultBodyLimit::max(MAX_BODY))
@@ -128,6 +129,18 @@ pub fn start(dir: &Path, address: &str) -> Result<Running> {
 }
 
 type Response = std::result::Result<Json<Value>, (StatusCode, Json<Value>)>;
+
+async fn leave(State(relay): State<Arc<Relay>>, headers: HeaderMap) -> Response {
+    let credential = headers
+        .get("authorization")
+        .and_then(|h| h.to_str().ok())
+        .and_then(|h| h.strip_prefix("Bearer "))
+        .unwrap_or("");
+    relay
+        .leave(credential)
+        .map(|_| Json(json!({})))
+        .map_err(failure)
+}
 fn failure(message: String) -> (StatusCode, Json<Value>) {
     (StatusCode::BAD_REQUEST, Json(json!({"error":message})))
 }

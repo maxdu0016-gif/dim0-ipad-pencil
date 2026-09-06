@@ -38,6 +38,8 @@ jobs:
 
       - name: Bundle offline app
         working-directory: webui
+        env:
+          NODE_OPTIONS: --max-old-space-size=4096
         run: |
           npm ci
           npx vite build --config vite.ios-offline.config.ts

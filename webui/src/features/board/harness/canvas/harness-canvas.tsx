@@ -418,7 +418,7 @@ export function HarnessCanvas({ local = false }: { local?: boolean } = {}) {
           // persistence stays whole-board, so other layers are never dropped.
           applyContentToStore(store, content, rootId ?? null)
           const binding = readLanBinding(boardId)
-          if (binding) {
+          if (binding && !binding.paused) {
             if (store.clientId !== binding.clientId) throw new Error("请重新打开画布以恢复配对身份")
             const handle = await attachLanBoard({ boardId, store, content, persistence, engine: stores.engine, rootId: rootId ?? null, binding,
               onState: (state, error) => setLanStatus(boardId, state === "connected" ? "已连接" : `等待重连：${error ?? "电脑暂时不可达"}`),

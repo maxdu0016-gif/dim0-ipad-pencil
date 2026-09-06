@@ -106,19 +106,57 @@ export function PairingDialog({ boardId, open, onOpenChange }: { boardId: string
     window.location.assign(`/local/${encodeURIComponent(seed.boardId)}`)
   }
 
+  const unpair = async (): Promise<void> => {
+    if (!binding) return
+    const sync = getBoardSyncRef()
+    const persistence = getBoardPersistenceRef()
+    if (!persistence) throw new Error("画布尚未完成加载")
+    let revoked = binding.retiring ?? false
+    sync?.disconnect()
+    try {
+      await sync?.settle()
+      await persistence.flush()
+      if (binding.role === "host") {
+        await lanCommand("start", { address: binding.address })
+        await lanCommand("retire", binding)
+      } else await lanCommand("forget", binding)
+      revoked = true
+      await persistence.compact()
+      const stores = await getLocalStores()
+      const meta = await stores.boards.getBoard(boardId)
+      if (meta) await stores.boards.createBoard({ ...meta, lanRoom: undefined })
+      await stores.engine.delete("sync_meta", boardId)
+      saveLanBinding(boardId, null)
+      setInvitation(null)
+      setPeers([])
+    } catch (e) {
+      if (revoked) saveLanBinding(boardId, { ...binding, paused: true, retiring: true })
+      else sync?.reconnect()
+      throw e
+    }
+  }
+
   return <Dialog open={open} onOpenChange={onOpenChange}>
     <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-lg">
       <DialogHeader><DialogTitle>局域网配对</DialogTitle>
         <DialogDescription>电脑和 iPad 连接同一 Wi-Fi 或热点。保持 Dim0 电脑端运行；无互联网也能连接。</DialogDescription>
       </DialogHeader>
-      {binding && <p role="status">{status} · {binding.endpoint}</p>}
+      {binding && <>
+        <p role="status">{binding.paused ? "已暂停，修改保存在本机" : status} · {binding.endpoint}</p>
+        <Button variant="outline" disabled={busy || binding.retiring} onClick={() => void run(async () => {
+          await getBoardSyncRef()?.settle()
+          await getBoardPersistenceRef()?.flush()
+          saveLanBinding(boardId, { ...binding, paused: !binding.paused })
+        })}>{binding.paused ? "恢复同步" : "暂停此设备同步"}</Button>
+        <Button variant="outline" disabled={busy} onClick={() => void run(unpair)}>解除配对并保留本地副本</Button>
+      </>}
       {host && <>
         {!binding && <label className="grid gap-2">电脑 Wi-Fi 地址
           <select className="rounded border p-2" value={address} onChange={(e) => setAddress(e.target.value)}>
             {addresses.map((ip) => <option key={ip}>{ip}</option>)}
           </select>
         </label>}
-        <Button disabled={busy || (!binding && !address)} onClick={() => void run(invite)}>{invitation ? "重新生成配对码" : "生成配对码"}</Button>
+        <Button disabled={busy || binding?.retiring || (!binding && !address)} onClick={() => void run(invite)}>{invitation ? "重新生成配对码" : "生成配对码"}</Button>
         {invitation && <>
           <img className="mx-auto w-64 bg-white p-2" alt="iPad 配对二维码" src={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(invitation.svg)}`} />
           <p className="text-sm">配对码 10 分钟内有效，仅供一台设备使用。扫码后请在下方确认设备。</p>

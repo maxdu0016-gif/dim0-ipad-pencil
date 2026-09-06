@@ -9,6 +9,8 @@ export type LanBinding = {
   endpoint: string
   address?: string
   connectionId?: string
+  paused?: boolean
+  retiring?: boolean
 }
 
 
