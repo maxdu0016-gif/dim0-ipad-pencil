@@ -1,5 +1,5 @@
 import { useEffect, type RefObject } from "react"
-import { hitTestAny, screenToWorld, type CanvasStore, type NodeId } from "@canvas-harness/core"
+import { EDGE_HIT_SLOP_PX, hitTestAny, hitTestEdge, screenToWorld, type CanvasStore, type NodeId, type EdgeId } from "@canvas-harness/core"
 import { useBoardAppStore } from "../store/board-app-store"
 import { CUSTOM_NODE_TYPES } from "./custom-node-types"
 
@@ -9,7 +9,7 @@ export function useTouchShapeEdit(wrapRef: RefObject<HTMLDivElement | null>, sto
   useEffect(() => {
     const wrap = wrapRef.current
     if (!wrap) return
-    let down: { id: number; x: number; y: number; time: number; nodeId: NodeId } | null = null
+    let down: { id: number; x: number; y: number; time: number; nodeId?: NodeId; edgeId?: EdgeId } | null = null
     let last: { nodeId: NodeId; time: number; x: number; y: number } | null = null
 
     const reset = (): void => {
@@ -30,7 +30,16 @@ export function useTouchShapeEdit(wrapRef: RefObject<HTMLDivElement | null>, sto
       }
       const rect = host.getBoundingClientRect()
       const camera = store.getCamera()
-      const hit = hitTestAny(store, screenToWorld({ x: e.clientX - rect.left, y: e.clientY - rect.top }, camera), camera.z)
+      const world = screenToWorld({ x: e.clientX - rect.left, y: e.clientY - rect.top }, camera)
+      const hit = hitTestAny(store, world, camera.z)
+      // Use the engine's curve geometry with a 44px touch target; nodes retain priority.
+      const edge = !hit || "edgeId" in hit
+        ? hitTestEdge(store, world, camera.z * EDGE_HIT_SLOP_PX / 22)
+        : null
+      if (edge) {
+        down = { id: e.pointerId, x: e.clientX, y: e.clientY, time: e.timeStamp, edgeId: edge.edgeId }
+        return
+      }
       const node = hit?.kind === "body" && "nodeId" in hit ? store.getNode(hit.nodeId) : undefined
       if (!node || CUSTOM_NODE_TYPES.has(node.type)) {
         reset()
@@ -49,6 +58,12 @@ export function useTouchShapeEdit(wrapRef: RefObject<HTMLDivElement | null>, sto
         last = null
         return
       }
+      if (tap.edgeId) {
+        last = null
+        store.setSelection([tap.edgeId])
+        return
+      }
+      if (!tap.nodeId) return
       if (last?.nodeId === tap.nodeId && e.timeStamp - last.time < 400
         && Math.hypot(e.clientX - last.x, e.clientY - last.y) <= 16) {
         last = null

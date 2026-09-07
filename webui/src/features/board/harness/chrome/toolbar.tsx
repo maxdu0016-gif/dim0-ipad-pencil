@@ -364,6 +364,7 @@ export function HarnessToolbar({ local = false }: { local?: boolean } = {}) {
           <TooltipTrigger asChild>
             <button
               type="button"
+              onPointerDown={(event) => event.preventDefault()}
               onClick={removeSelection}
               aria-label={selectedEdgeCount > 0
                 ? selectedEdgeCount === 1 ? "Delete selected connector" : "Delete selected connectors"
