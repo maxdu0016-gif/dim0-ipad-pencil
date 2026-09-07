@@ -31,6 +31,8 @@ final class NativePencilWebContainer: UIView, PKCanvasViewDelegate {
     let webView: PencilAwareWebView
 
     private let pencilCanvas = PencilCanvasView()
+    private let exitPencilButton = UIButton(type: .system)
+    private var inputSuspended = false
     private let documentStore: NativePencilDocumentStore
     private let sessionId: String
     private var overlayFrame = CGRect.zero
@@ -141,9 +143,13 @@ final class NativePencilWebContainer: UIView, PKCanvasViewDelegate {
         erasing: Bool,
         camera: NativePencilCamera
     ) {
-        overlayFrame = frame
-        self.passthroughRects = passthroughRects
-        requestedEnabled = enabled && !erasing
+        if overlayFrame != frame || self.passthroughRects != passthroughRects {
+            overlayFrame = frame
+            self.passthroughRects = passthroughRects
+            setNeedsLayout()
+        }
+        if !enabled || erasing { inputSuspended = false }
+        requestedEnabled = enabled && !erasing && !inputSuspended
         isPageAvailable = true
         configureToolIfNeeded(
             color: color,
@@ -174,7 +180,15 @@ final class NativePencilWebContainer: UIView, PKCanvasViewDelegate {
         updatePencilAvailability()
         scheduleAutomaticPublish()
         scheduleCanvasReconciliation()
-        setNeedsLayout()
+    }
+
+    /// Releases touch interception immediately, even if the web process cannot answer yet.
+    @objc func stopHandwriting() {
+        inputSuspended = true
+        requestedEnabled = false
+        updatePencilAvailability()
+        persistCurrentDocument()
+        webView.evaluateJavaScript("window.dispatchEvent(new Event('dim0:native-pencil-exit'))", completionHandler: nil)
     }
 
     /// Stops input and pending idle work while WebKit replaces the active page.
@@ -340,6 +354,21 @@ final class NativePencilWebContainer: UIView, PKCanvasViewDelegate {
             self?.onPencilDoubleTap?()
         }
         addSubview(pencilCanvas)
+        var exitConfiguration = UIButton.Configuration.filled()
+        exitConfiguration.title = "退出手写"
+        exitConfiguration.baseBackgroundColor = .secondarySystemBackground
+        exitConfiguration.baseForegroundColor = .label
+        exitPencilButton.configuration = exitConfiguration
+        exitPencilButton.accessibilityIdentifier = "native-exit-handwriting"
+        exitPencilButton.isHidden = true
+        exitPencilButton.addTarget(self, action: #selector(stopHandwriting), for: .touchUpInside)
+        exitPencilButton.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(exitPencilButton)
+        NSLayoutConstraint.activate([
+            exitPencilButton.trailingAnchor.constraint(equalTo: safeAreaLayoutGuide.trailingAnchor, constant: -12),
+            exitPencilButton.topAnchor.constraint(equalTo: safeAreaLayoutGuide.topAnchor, constant: 12),
+            exitPencilButton.heightAnchor.constraint(greaterThanOrEqualToConstant: 44)
+        ])
     }
 
     private func switchContext(to newContextId: String, camera: NativePencilCamera) {
@@ -530,6 +559,7 @@ final class NativePencilWebContainer: UIView, PKCanvasViewDelegate {
         let visible = isPageAvailable && !isLoadingDocument && !overlayFrame.isEmpty
         pencilCanvas.isHidden = !visible
         pencilCanvas.isUserInteractionEnabled = visible && requestedEnabled
+        exitPencilButton.isHidden = !pencilCanvas.isUserInteractionEnabled
     }
 
     /// Debounces acknowledged-ink cleanup; new ink gets an immediate checkpoint instead.
@@ -705,17 +735,6 @@ final class NativePencilWebContainer: UIView, PKCanvasViewDelegate {
             .transformed(using: Self.worldToScreenTransform(currentCamera))
         let messageId = UUID().uuidString.lowercased()
         let sentIds = Set(batch.map { PencilStrokeExporter.stableId(for: $0) })
-        let delta = NativePencilInkDelta(
-            messageId: messageId,
-            manual: manual,
-            sessionId: sessionId,
-            contextId: contextId,
-            camera: currentCamera,
-            strokes: exportStrokes(screenDrawing.strokes),
-            removedStrokeIds: [],
-            total: min(1_000_000, manual ? manualSyncTotal : pendingCount)
-        )
-
         inFlightPublish = InFlightPublish(
             messageId: messageId,
             contextId: contextId,
@@ -723,12 +742,41 @@ final class NativePencilWebContainer: UIView, PKCanvasViewDelegate {
             strokeIds: sentIds,
             manual: manual
         )
-        guard dispatch(delta, messageId: messageId) else {
-            inFlightPublish = nil
-            if manual { manualPublishQueued = true }
-            return
+        let savedSessionId = sessionId
+        let savedContextId = contextId
+        let savedCamera = currentCamera
+        let savedColors = strokeColors
+        let total = min(1_000_000, manual ? manualSyncTotal : pendingCount)
+        // Interpolation and JSON encoding must not block PencilKit or the native escape button.
+        Task { [weak self] in
+            let json = await Task.detached(priority: .userInitiated) {
+                let delta = NativePencilInkDelta(
+                    messageId: messageId,
+                    manual: manual,
+                    sessionId: savedSessionId,
+                    contextId: savedContextId,
+                    camera: savedCamera,
+                    strokes: PencilStrokeExporter.exportStrokes(screenDrawing, colors: savedColors),
+                    removedStrokeIds: [],
+                    total: total
+                )
+                guard let data = try? JSONEncoder().encode(delta) else { return Optional<String>.none }
+                return String(data: data, encoding: .utf8)
+            }.value
+            guard let self, self.inFlightPublish?.messageId == messageId else { return }
+            guard self.isPageAvailable, self.canReplaceCanvasDrawing else {
+                self.inFlightPublish = nil
+                if manual { self.manualPublishQueued = true }
+                self.scheduleAutomaticPublish()
+                return
+            }
+            guard let json else {
+                self.acknowledge(messageId: messageId, handled: false)
+                return
+            }
+            self.dispatch(json, messageId: messageId)
+            self.schedulePublishTimeout(messageId: messageId)
         }
-        schedulePublishTimeout(messageId: messageId)
     }
 
     private func schedulePublishTimeout(messageId: String) {
@@ -757,26 +805,8 @@ final class NativePencilWebContainer: UIView, PKCanvasViewDelegate {
         return batch
     }
 
-    private func exportStrokes(_ strokes: [PKStroke]) -> [NativeInkStroke] {
-        strokes.compactMap { pencilStroke in
-            PencilStrokeExporter.exportStroke(pencilStroke, origin: .zero).map { stroke in
-                NativeInkStroke(
-                    id: stroke.id,
-                    tool: stroke.tool,
-                    color: strokeColors[stroke.id] ?? stroke.color,
-                    width: stroke.width,
-                    opacity: stroke.opacity,
-                    points: stroke.points
-                )
-            }
-        }
-    }
-
-    private func dispatch<Message: Encodable>(_ message: Message, messageId: String) -> Bool {
-        guard let data = try? JSONEncoder().encode(message),
-              let json = String(data: data, encoding: .utf8) else {
-            return false
-        }
+    /// Delivers an already encoded batch; the native journal stays intact until a durable ACK.
+    private func dispatch(_ json: String, messageId: String) {
         let script = """
         (() => {
           const detail = \(json);
@@ -790,7 +820,6 @@ final class NativePencilWebContainer: UIView, PKCanvasViewDelegate {
                 self?.acknowledge(messageId: messageId, handled: false)
             }
         }
-        return true
     }
 
     private static func persistentSessionId() -> String {

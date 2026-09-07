@@ -9,6 +9,7 @@ import { RouterProvider } from '@tanstack/react-router'
 import { registerSW } from 'virtual:pwa-register'
 import { isIOSNative, isTauri, isWebKitWebview } from './platform'
 import { initNativePencilBridge } from './features/ios/native-pencil-bridge'
+import { initNativeViewport } from './features/ios/native-viewport'
 
 /**
  * Registers the PWA service worker and keeps it up to date automatically.
@@ -33,6 +34,7 @@ if (!isTauri()) {
 
 if (isIOSNative()) {
   document.documentElement.classList.add("ios-native")
+  initNativeViewport()
   initNativePencilBridge()
 }
 

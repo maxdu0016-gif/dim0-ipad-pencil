@@ -13,6 +13,28 @@
   display: none;
 }
 
+/* The native container handles keyboard-safe height. Keep the document anchored
+   inside that frame; scrolling belongs to the chat/editor panes, not the app. */
+.ios-native,
+.ios-native body {
+  height: 100%;
+  overflow: hidden;
+}
+.ios-native #root {
+  position: fixed;
+  inset: 0;
+  overflow: auto;
+}
+.ios-native #root > main,
+.ios-native [data-slot="sidebar-wrapper"] {
+  height: 100%;
+  min-height: 0;
+}
+.ios-native input,
+.ios-native textarea {
+  font-size: 16px;
+}
+
 /* Standalone desktop (frameless, transparent window): round the app to a window
    card and let the transparent corner cut-outs show the desktop behind. The app
    itself stays opaque via #root; `clip-path` (not overflow) rounds fixed overlays

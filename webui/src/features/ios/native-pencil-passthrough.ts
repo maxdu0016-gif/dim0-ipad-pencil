@@ -7,6 +7,8 @@ const MAX_PASSTHROUGH_RECTS = 64
 
 export const NATIVE_PENCIL_PASSTHROUGH_SELECTOR = [
   "[data-native-pencil-passthrough]",
+  '[data-coachmark="ai-island"]',
+  '[data-answer-card]',
   '[data-slot="dropdown-menu-content"]',
   '[data-slot="dropdown-menu-sub-content"]',
   '[data-slot="popover-content"]',
@@ -42,7 +44,6 @@ export const collectNativePencilPassthroughRects = (
 ): NativePencilRect[] => Array.from(
   root.querySelectorAll<HTMLElement>(NATIVE_PENCIL_PASSTHROUGH_SELECTOR),
 )
-  .slice(0, MAX_PASSTHROUGH_RECTS)
   .map((element) => element.getBoundingClientRect())
   .filter((rect) => finiteRect(rect) && rect.width > 0 && rect.height > 0)
   .map((rect) => {
@@ -58,6 +59,7 @@ export const collectNativePencilPassthroughRects = (
     }
   })
   .filter((rect) => rect.width > 0 && rect.height > 0)
+  .slice(0, MAX_PASSTHROUGH_RECTS)
 
 
 /** Returns whether a body child-list mutation can change an interactive portal rectangle. */

@@ -7,6 +7,22 @@ enum PencilStrokeExporter {
     private static let parametricStep: CGFloat = 0.25
     private static let maximumPointCount = 50_000
 
+    /// Exports an immutable drawing snapshot off the UI actor while preserving stored ink colors.
+    static func exportStrokes(_ drawing: PKDrawing, colors: [String: String]) -> [NativeInkStroke] {
+        drawing.strokes.compactMap { pencilStroke in
+            exportStroke(pencilStroke, origin: .zero).map { stroke in
+                NativeInkStroke(
+                    id: stroke.id,
+                    tool: stroke.tool,
+                    color: colors[stroke.id] ?? stroke.color,
+                    width: stroke.width,
+                    opacity: stroke.opacity,
+                    points: stroke.points
+                )
+            }
+        }
+    }
+
     /// Converts one completed PencilKit stroke to sampled points relative to the supplied origin.
     static func exportStroke(_ stroke: PKStroke, origin: CGPoint) -> NativeInkStroke? {
         let path = stroke.path

@@ -6,6 +6,49 @@ import XCTest
 
 @MainActor
 final class NativePencilRecoveryTests: XCTestCase {
+    /// The native escape path releases intercepted touches without waiting for JavaScript or losing ink.
+    func testExitHandwritingReleasesTouchesAndKeepsRecoveryInk() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = NativePencilDocumentStore(baseDirectory: directory)
+        let (container, canvas) = try await makeContainer(store: store)
+        canvas.drawing = makeDrawing()
+        let exit = try XCTUnwrap(container.subviews.compactMap { $0 as? UIButton }.first)
+        XCTAssertFalse(exit.isHidden)
+        container.stopHandwriting()
+        XCTAssertFalse(canvas.isUserInteractionEnabled)
+        XCTAssertTrue(exit.isHidden)
+        XCTAssertEqual(canvas.drawing.strokes.count, 1)
+        await container.saveTask?.value
+        let document = try await store.load(contextId: "recovery-board:")
+        XCTAssertEqual(try PKDrawing(data: XCTUnwrap(document).drawing).strokes.count, 1)
+    }
+
+    /// WebKit's keyboard-induced outer scroll cannot move the fixed app frame.
+    func testKeyboardCannotPanOuterWebView() {
+        let coordinator = Dim0WebView.Coordinator(model: Dim0WebAppModel())
+        let scrollView = UIScrollView()
+        scrollView.contentOffset = CGPoint(x: 40, y: 160)
+        coordinator.scrollViewDidScroll(scrollView)
+        XCTAssertEqual(scrollView.contentOffset, .zero)
+        coordinator.scrollViewDidScroll(scrollView)
+        XCTAssertEqual(scrollView.contentOffset, .zero)
+    }
+
+    /// The immutable export can run away from the UI thread and retain the original stored color.
+    func testBackgroundExportPreservesStrokeIdentityAndColor() async throws {
+        let drawing = makeDrawing()
+        let id = PencilStrokeExporter.stableId(for: drawing.strokes[0])
+        let (onMainThread, strokes) = await Task.detached {
+            (Thread.isMainThread, PencilStrokeExporter.exportStrokes(drawing, colors: [id: "#ABCDEF"]))
+        }.value
+        XCTAssertFalse(onMainThread)
+        XCTAssertEqual(strokes.count, 1)
+        XCTAssertEqual(strokes.first?.id, id)
+        XCTAssertEqual(strokes.first?.color, "#ABCDEF")
+        XCTAssertFalse(try XCTUnwrap(strokes.first).points.isEmpty)
+    }
+
     /// Shared per-board journals require a single native window until writer ownership is implemented.
     func testAppDisablesMultipleJournalWriters() throws {
         let manifest = try XCTUnwrap(Bundle.main.object(forInfoDictionaryKey: "UIApplicationSceneManifest") as? [String: Any])

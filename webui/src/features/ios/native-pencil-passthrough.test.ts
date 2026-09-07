@@ -31,6 +31,26 @@ const childListMutation = (
 
 
 describe("native Pencil passthrough rectangles", () => {
+  it("leaves chat input, replies and visible controls reachable even after many hidden controls", () => {
+    const root = document.createElement("div")
+    for (let index = 0; index < 64; index++) {
+      const hidden = document.createElement("div")
+      hidden.dataset.nativePencilPassthrough = ""
+      root.append(hidden)
+    }
+    const composer = document.createElement("div")
+    composer.dataset.coachmark = "ai-island"
+    const reply = document.createElement("div")
+    reply.dataset.answerCard = ""
+    root.append(composer, reply)
+    setRect(composer, { left: 100, top: 600, width: 400, height: 80 })
+    setRect(reply, { left: 600, top: 80, width: 200, height: 300 })
+    expect(collectNativePencilPassthroughRects(root, { width: 1000, height: 800 })).toEqual([
+      { x: 92, y: 592, width: 416, height: 96 },
+      { x: 592, y: 72, width: 216, height: 316 },
+    ])
+  })
+
   it("collects the tray and its outside drag handle as separate padded rectangles", () => {
     const root = document.createElement("div")
     const toolbar = document.createElement("div")

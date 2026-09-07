@@ -3,6 +3,7 @@ import type { CanvasStore } from "@canvas-harness/core"
 import { getBoardPersistenceRef } from "@/features/board/persist/local/board-persistence-ref"
 import { getBoardSyncRef } from "@/features/board/harness/sync/board-sync-ref"
 import { isIOSNative } from "@/platform"
+import { isTypingTarget } from "@/lib/dom/is-typing-target"
 import { TOOLBAR_DOCK_CHANGE_EVENT } from "@/features/board/harness/chrome/toolbar-dock"
 import { applyNativePencilSnapshot } from "./apply-native-pencil-stroke"
 import { configureNativePencil, subscribeNativePencilSnapshots } from "./native-pencil-bridge"
@@ -72,7 +73,7 @@ export const useNativePencilCanvas = ({
       const rect = element.getBoundingClientRect()
       const camera = store.getCamera()
       configureNativePencil({
-        enabled: enabled && ready && canEdit,
+        enabled: enabled && ready && canEdit && !isTypingTarget(document.activeElement),
         contextId,
         rect: { x: rect.x, y: rect.y, width: rect.width, height: rect.height },
         passthroughRects: collectNativePencilPassthroughRects(),
@@ -97,6 +98,11 @@ export const useNativePencilCanvas = ({
     const unsubscribeCamera = store.subscribe("camera", scheduleConfiguration)
     window.addEventListener("resize", scheduleConfiguration)
     window.addEventListener("scroll", scheduleConfiguration, true)
+    window.addEventListener("focusin", scheduleConfiguration)
+    window.addEventListener("focusout", scheduleConfiguration)
+    window.addEventListener("input", scheduleConfiguration)
+    window.visualViewport?.addEventListener("resize", scheduleConfiguration)
+    window.visualViewport?.addEventListener("scroll", scheduleConfiguration)
     window.addEventListener(TOOLBAR_DOCK_CHANGE_EVENT, scheduleConfiguration)
     scheduleConfiguration()
 
@@ -107,6 +113,11 @@ export const useNativePencilCanvas = ({
       unsubscribeCamera()
       window.removeEventListener("resize", scheduleConfiguration)
       window.removeEventListener("scroll", scheduleConfiguration, true)
+      window.removeEventListener("focusin", scheduleConfiguration)
+      window.removeEventListener("focusout", scheduleConfiguration)
+      window.removeEventListener("input", scheduleConfiguration)
+      window.visualViewport?.removeEventListener("resize", scheduleConfiguration)
+      window.visualViewport?.removeEventListener("scroll", scheduleConfiguration)
       window.removeEventListener(TOOLBAR_DOCK_CHANGE_EVENT, scheduleConfiguration)
 
       const rect = element?.getBoundingClientRect()

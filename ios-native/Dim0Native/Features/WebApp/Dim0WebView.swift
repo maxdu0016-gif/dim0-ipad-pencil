@@ -15,6 +15,7 @@ struct Dim0WebView: UIViewRepresentable {
         let configuration = WKWebViewConfiguration()
         configuration.websiteDataStore = .default()
         configuration.allowsInlineMediaPlayback = true
+        configuration.ignoresViewportScaleLimits = false
         configuration.defaultWebpagePreferences.allowsContentJavaScript = true
         configuration.userContentController.addUserScript(Self.nativeBootstrapScript())
         configuration.userContentController.add(context.coordinator, name: "dim0NativePencil")
@@ -25,6 +26,9 @@ struct Dim0WebView: UIViewRepresentable {
         webView.uiDelegate = context.coordinator
         webView.allowsBackForwardNavigationGestures = true
         webView.scrollView.contentInsetAdjustmentBehavior = .never
+        webView.scrollView.delegate = context.coordinator
+        webView.scrollView.bounces = false
+        webView.scrollView.pinchGestureRecognizer?.isEnabled = false
         webView.isOpaque = true
         webView.backgroundColor = .systemBackground
         let container = NativePencilWebContainer(webView: webView)
@@ -72,7 +76,7 @@ struct Dim0WebView: UIViewRepresentable {
     }
 
     @MainActor
-    final class Coordinator: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownloadDelegate,
+    final class Coordinator: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownloadDelegate, UIScrollViewDelegate,
         WKScriptMessageHandler, ASWebAuthenticationPresentationContextProviding {
         private static let maximumPencilPassthroughRects = 64
 
@@ -83,6 +87,12 @@ struct Dim0WebView: UIViewRepresentable {
 
         init(model: Dim0WebAppModel) {
             self.model = model
+        }
+
+        /// Keep keyboard focus from panning the entire app; inner web panes own their scrolling.
+        func scrollViewDidScroll(_ scrollView: UIScrollView) {
+            guard scrollView.contentOffset != .zero else { return }
+            scrollView.setContentOffset(.zero, animated: false)
         }
 
         /// Receives native ink configuration or an explicit sync request from the trusted Dim0 page.

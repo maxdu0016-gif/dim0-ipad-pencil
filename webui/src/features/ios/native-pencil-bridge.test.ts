@@ -50,6 +50,17 @@ describe("native Pencil bridge", () => {
     expect(useBoardAppStore.getState().tool).toBe("ink")
   })
 
+  it("exits handwriting through the native escape control and cleans up its listener", () => {
+    dispose = initNativePencilBridge()
+    useBoardAppStore.getState().setTool("ink")
+    window.dispatchEvent(new Event("dim0:native-pencil-exit"))
+    expect(useBoardAppStore.getState().tool).toBe("select")
+    dispose()
+    useBoardAppStore.getState().setTool("ink")
+    window.dispatchEvent(new Event("dim0:native-pencil-exit"))
+    expect(useBoardAppStore.getState().tool).toBe("ink")
+  })
+
   it("posts viewport configuration and resolves explicit sync after an async snapshot is handled", async () => {
     const messages: unknown[] = []
     let finishHandling!: (handled: boolean) => void

@@ -192,7 +192,7 @@ export function RootLayout() {
                 <>
                   {!presentationMode && <AppSidebar onLogout={onLogout} />}
                   <SidebarInset className="overflow-hidden">
-                    <header className="flex h-16 shrink-0 items-center gap-2 p-4 absolute top-0 inset-x-0 z-50">
+                    <header data-native-pencil-passthrough="" className="flex h-16 shrink-0 items-center gap-2 p-4 absolute top-0 inset-x-0 z-50">
                       {navCluster}
                       <div className="ml-auto"><ConnectionIndicator /></div>
                     </header>

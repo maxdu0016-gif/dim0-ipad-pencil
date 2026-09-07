@@ -96,7 +96,7 @@ export function HarnessViewportControls() {
   )
 
   return (
-    <div className="absolute bottom-3 left-3 z-50">
+    <div data-native-pencil-passthrough="" className="absolute bottom-3 left-3 z-50">
       {/*
         Container is intentionally chrome-less — transparent, no border
         or shadow. Each button keeps its own hover state for affordance;

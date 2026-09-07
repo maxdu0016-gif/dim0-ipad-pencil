@@ -211,6 +211,7 @@ export const subscribeNativePencilSnapshots = (
 
 /** Routes native Pencil gestures into the active canvas tool without touching ink Pointer Events. */
 export const initNativePencilBridge = (): (() => void) => {
+  const onExit = (): void => useBoardAppStore.getState().setTool("select")
   const onDoubleTap = (event: Event): void => {
     const customEvent = event as CustomEvent<NativePencilGestureDetail>
     if (customEvent.detail) customEvent.detail.handled = true
@@ -220,5 +221,9 @@ export const initNativePencilBridge = (): (() => void) => {
   }
 
   window.addEventListener("dim0:native-pencil-double-tap", onDoubleTap)
-  return () => window.removeEventListener("dim0:native-pencil-double-tap", onDoubleTap)
+  window.addEventListener("dim0:native-pencil-exit", onExit)
+  return () => {
+    window.removeEventListener("dim0:native-pencil-double-tap", onDoubleTap)
+    window.removeEventListener("dim0:native-pencil-exit", onExit)
+  }
 }

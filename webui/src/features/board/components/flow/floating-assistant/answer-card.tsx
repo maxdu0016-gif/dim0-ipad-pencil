@@ -66,6 +66,7 @@ export const AnswerCard = ({ onOpenFullSheet }: AnswerCardProps) => {
       )}
     >
       <div
+        data-native-pencil-passthrough=""
         className='absolute left-0 top-1/2 -translate-y-1/2 -translate-x-[calc(100%+8px)] flex flex-col items-center gap-1 p-1 bg-sidebar border border-sidebar-border rounded-lg shadow-md'
         onClick={(e) => e.stopPropagation()}
       >

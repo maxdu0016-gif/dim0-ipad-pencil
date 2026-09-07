@@ -1,4 +1,4 @@
-import { useState, type KeyboardEvent } from "react"
+import { useRef, useState, type KeyboardEvent } from "react"
 import TextareaAutosize from "react-textarea-autosize"
 import { toast } from "sonner"
 import { SparklesIcon } from "@/components/icons"
@@ -8,6 +8,7 @@ import { SendMessageError } from "@/features/agent/api/send-message"
 import { useChatSubmit } from "@/features/agent/hooks/use-chat-submit"
 import { useChat } from "@/features/agent/hooks/chat-context"
 import { DocAttachButton } from "@/features/agent/components/chat/doc-attach"
+import { SendButton } from "@/features/agent/components/chat/send-button"
 import { buildMessageContext, useHasMessageContext } from "@/features/agent/hooks/use-message-context"
 import { SettingsButton } from "@/features/agent/settings/settings-button"
 import { useHasUsableModel } from "@/features/agent/services/use-agent-availability"
@@ -28,6 +29,8 @@ export interface FloatingIslandProps {
  */
 export const FloatingIsland = ({ boardId, onOpenFullSheet }: FloatingIslandProps) => {
   const [input, setInput] = useState("")
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const submitting = useRef(false)
   const latestAssistantMessage = useCurrentAssistantMessage()
   const isStreaming = latestAssistantMessage?.streaming === true
   const submit = useChatSubmit()
@@ -42,25 +45,31 @@ export const FloatingIsland = ({ boardId, onOpenFullSheet }: FloatingIslandProps
   const hasModel = useHasUsableModel()
 
   const handleSubmit = async () => {
-    if (isStreaming || !hasModel) return
+    if (submitting.current || isStreaming || !hasModel) return
     const trimmed = input.trim()
     if (!trimmed) return
+    submitting.current = true
+    setIsSubmitting(true)
     setInput("")
     try {
       const messageContext = buildMessageContext()
       await submit(trimmed, { attachedBoardId: boardId, messageContext })
     } catch (error) {
+      setInput((current) => current || input)
       const message = error instanceof SendMessageError
         ? error.message
         : error instanceof Error
           ? error.message
           : "Could not send message."
       toast.error(message)
+    } finally {
+      submitting.current = false
+      setIsSubmitting(false)
     }
   }
 
   const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === "Enter" && !e.shiftKey) {
+    if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing && e.keyCode !== 229) {
       e.preventDefault()
       void handleSubmit()
     }
@@ -122,8 +131,8 @@ export const FloatingIsland = ({ boardId, onOpenFullSheet }: FloatingIslandProps
             placeholder={hasModel ? 'Ask about this board, or give a task…' : 'Set a model key to start'}
             minRows={1}
             maxRows={4}
-            disabled={isStreaming || !hasModel}
-            className='flex-1 min-w-0 bg-transparent text-sm outline-none resize-none py-1 placeholder:text-muted-foreground scrollbar-thin'
+            disabled={isStreaming || isSubmitting || !hasModel}
+            className='flex-1 min-w-0 bg-transparent text-base outline-none resize-none py-1 placeholder:text-muted-foreground scrollbar-thin'
           />
           <span className='shrink-0 text-sm text-muted-foreground/70 font-mono px-1 select-none hidden sm:inline'>
             ⌘↵
@@ -131,6 +140,14 @@ export const FloatingIsland = ({ boardId, onOpenFullSheet }: FloatingIslandProps
           </div>
           {local && <DocAttachButton boardId={boardId} />}
           <SettingsButton emphasize={!hasModel} />
+          <SendButton
+            type="button"
+            loadingStatus={isStreaming || isSubmitting ? "loading" : "loaded"}
+            disabled={isStreaming || isSubmitting || !hasModel || !input.trim()}
+            onPointerDown={(event) => event.preventDefault()}
+            onClick={() => void handleSubmit()}
+            className="shrink-0"
+          />
         </div>
       </div>
       <p className='text-center text-[11px] text-muted-foreground/70 px-3'>
