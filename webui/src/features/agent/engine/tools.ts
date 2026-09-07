@@ -220,7 +220,13 @@ export const writeNote = defineTool({
       }
     }
 
-    const spec = { content, label, type: note_type, near: nearFor(near), colors: colorsFor(background_color, border_color) }
+    // Resolve the submit-time selection in the working layer so navigation
+    // cannot anchor an off-scene app to an unrelated visible note.
+    const anchor = ctx.placementAnchorId ? store.getNode(asNodeId(ctx.placementAnchorId)) : undefined
+    const placement = nearFor(near) ?? (note_type === "mini-app" && anchor
+      ? { nodeId: String(anchor.id), dir: "right" as const }
+      : undefined)
+    const spec = { content, label, type: note_type, near: placement, colors: colorsFor(background_color, border_color) }
     if (note_id) {
       // In the working folder → full rewrite (NOT a creation; the turn won't
       // re-arrange/recenter it). Existing anywhere else on the board (incl. a note

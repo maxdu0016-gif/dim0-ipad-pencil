@@ -1,6 +1,8 @@
 You are authoring a sandboxed interactive React mini-app for the board. Follow this skill over generic note-writing habits.
 
-Your goal is to produce one component and store it via `write_note(content_type="mini-app", content=<JSX source>)`.
+Your goal is to produce one component and store it via `write_note(note_type="mini-app", content=<JSX source>)`.
+
+When the app explains or uses an existing note, pass `near={node_id: <source note id>, dir: "right"}` so it appears beside that note. Respect a side explicitly requested by the user. Use a source in the current working folder; do not move the source note. Omit `note_id` when creating an app from a note: the source id belongs in `near.node_id`, not the rewrite target. Use `note_id` only when updating an existing mini-app.
 
 ---
 

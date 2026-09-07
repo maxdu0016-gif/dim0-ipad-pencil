@@ -82,6 +82,8 @@ export interface LlmClient {
 /** Capabilities a tool may need. Search/registry are optional (board-scoped). */
 export type ToolContext = {
   store: CanvasStore
+  /** Single selected note at submit time; fallback anchor for a new mini-app. */
+  placementAnchorId?: string
   /**
    * Content-level write port (S1). Tools write through this, not `store`
    * directly, so the runtime is decoupled from the collab op pipeline. Defaults

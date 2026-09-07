@@ -192,6 +192,8 @@ export function useLocalSubmitPrompt(boardId: string, syncTranscript = false) {
       // Selected-node / surface context, captured at submit time by the composer.
       const messageContext = options.messageContext?.trim() || undefined
       const store = getCanvasStoreRef()
+      const selectedIds = store?.getSelection() ?? []
+      const placementAnchorId = selectedIds.length === 1 ? String(selectedIds[0]) : undefined
       const config = asConfig()
       // One run id per user message: every managed call in this turn (LLM +
       // tools) carries it, so the server meters the whole run as a single unit
@@ -387,6 +389,7 @@ export function useLocalSubmitPrompt(boardId: string, syncTranscript = false) {
           store,
           rootId,
           sceneRootId: rootId,
+          placementAnchorId,
           boardId,
           search,
           boardNotes,

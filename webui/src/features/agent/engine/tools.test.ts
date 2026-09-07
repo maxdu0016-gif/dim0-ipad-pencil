@@ -344,6 +344,54 @@ describe("writeNote", () => {
     expect(store.getNode(asNodeId(res.id!))?.type).toBe("mini-app")
   })
 
+  it("pins a new mini-app beside the submit-time note, not the board's distant bottom", async () => {
+    seed(store, "source", { content: "Keep this note" })
+    seed(store, "distant")
+    store.updateNode(asNodeId("distant"), { y: 5000 })
+    ctx.placementAnchorId = "source"
+    store.setSelection([asNodeId("distant")]) // A later selection must not change the anchor.
+    const res = await writeNote.run({ content: "function Widget() { return <div>app</div> }", note_type: "mini-app" }, ctx) as { id: string; placed: boolean }
+    const app = store.getNode(asNodeId(res.id))!
+    expect(res.placed).toBe(true) // Excluded from the turn-end auto-arrange.
+    expect(app.x).toBe(148)
+    const source = store.getNode(asNodeId("source"))!
+    expect(Math.abs(app.y + app.h / 2 - (source.y + source.h / 2))).toBeLessThanOrEqual(2)
+    expect(body(store, "source")).toBe("Keep this note")
+  })
+
+  it("honors an explicit mini-app anchor and side over the selected note", async () => {
+    seed(store, "selected")
+    seed(store, "source")
+    store.updateNode(asNodeId("source"), { x: 2000 })
+    ctx.placementAnchorId = "selected"
+    const res = await writeNote.run({
+      content: "function Widget() { return <div>app</div> }", note_type: "mini-app",
+      near: { node_id: "source", dir: "below", gap: 40 },
+    }, ctx) as { id: string; placed: boolean }
+    const app = store.getNode(asNodeId(res.id))!
+    expect(res.placed).toBe(true)
+    expect(app.y).toBe(90)
+    expect(app.x + app.w / 2).toBe(2050)
+  })
+
+  it("avoids an occupied space beside the related note", async () => {
+    seed(store, "source")
+    seed(store, "blocker")
+    store.updateNode(asNodeId("blocker"), { x: 148 })
+    ctx.placementAnchorId = "source"
+    const res = await writeNote.run({ content: "function Widget() { return <div>app</div> }", note_type: "mini-app" }, ctx) as { id: string }
+    expect(store.getNode(asNodeId(res.id))!.x).toBe(296)
+    expect(store.getNode(asNodeId("blocker"))!.x).toBe(148)
+  })
+
+  it("falls back safely when the selected anchor is outside the working layer", async () => {
+    seed(store, "local")
+    ctx.placementAnchorId = "other-layer-note"
+    const res = await writeNote.run({ content: "function Widget() { return <div>app</div> }", note_type: "mini-app" }, ctx) as { id: string; placed: boolean }
+    expect(res.placed).toBe(false)
+    expect(store.getNode(asNodeId(res.id))!.y).toBe(130)
+  })
+
   it("validates a bare rewrite of an existing mini-app (note_type omitted)", async () => {
     const made = (await writeNote.run(
       { content: "function Widget() { return <div>hi</div> }", note_type: "mini-app" },
