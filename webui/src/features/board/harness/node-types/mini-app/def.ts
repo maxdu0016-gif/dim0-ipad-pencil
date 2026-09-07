@@ -8,8 +8,8 @@ import { MiniAppView } from "./view"
  * Mini-app node — sandboxed-iframe-rendered React component.
  *
  * LOD threshold is lower than the HTML widget's (0.25 vs 0.6) because
- * mini-apps tend to grow tall via the canvas auto-grow path
- * (view.tsx → store.updateNode). Users routinely zoom out to take in
+ * mini-apps can contain large dashboards in user-sized cards.
+ * Users routinely zoom out to take in
  * a multi-section dashboard widget in context; cutting React off too
  * early defeats that — the placeholder is just a static icon, not
  * the widget. The off-screen suspension in view.tsx (useIsInView)

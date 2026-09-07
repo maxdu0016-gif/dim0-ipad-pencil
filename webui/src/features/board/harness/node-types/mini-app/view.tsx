@@ -14,7 +14,7 @@
 // Mirrors the shape of WidgetView in node-types/widget/view.tsx — the
 // canvas chrome conventions live there.
 
-import { useCallback, useEffect, useRef } from "react"
+import { useEffect, useRef } from "react"
 
 import { CursorClickIcon } from "@phosphor-icons/react"
 import { type NodeId } from "@canvas-harness/core"
@@ -38,18 +38,6 @@ import { useBoardAppStore } from "../../store/board-app-store"
 const useMiniAppMount = createDeferredMount({ cap: 8 })
 
 
-// Card chrome (padding + traffic-lights row + title slot). Subtracted
-// from the canvas node's reported `h` to derive the inner iframe slot
-// height, and added back when computing the node's target height from
-// the widget's natural content height.
-const CARD_CHROME_PX = 48
-
-// Hard cap on automatic growth — past this, the widget gets a
-// scrollbar inside the iframe slot instead of pushing the canvas
-// node taller. Stops a runaway widget from monopolizing the board.
-const MAX_AUTO_GROW_PX = 1200
-
-
 export interface MiniAppViewProps {
   id: NodeId
 }
@@ -59,7 +47,8 @@ export interface MiniAppViewProps {
  * Canvas view for a mini-app note. Renders the iframe via MiniAppMount while the
  * node should stay mounted (deferred-mount: in view + camera at rest, or a
  * recently-retained node); otherwise shows a paused-state placeholder card so the
- * rest of the board stays responsive.
+ * rest of the board stays responsive. Content scrolls inside the user-sized
+ * card so loading an app cannot grow it over neighboring notes.
  */
 export function MiniAppView({ id }: MiniAppViewProps) {
   const node = useNode(id)
@@ -84,68 +73,6 @@ export function MiniAppView({ id }: MiniAppViewProps) {
   // are still below the fold.
   useEffect(() => {
     prefetchMiniAppRuntime()
-  }, [])
-
-  // rAF-throttled grow-only resize. The widget posts `mini-app:resize`
-  // through MiniAppMount on every content-size change; we batch those
-  // into at most one node-resize per animation frame and only ever
-  // grow the card (the user is free to shrink it manually via the
-  // canvas resize handles afterward). `lastAppliedH` deduplicates
-  // identical heights so an idle widget reporting the same number
-  // doesn't trigger redundant store writes.
-  const pendingHeightRef = useRef<number | null>(null)
-  const rafIdRef = useRef<number | null>(null)
-  const lastAppliedHRef = useRef<number>(0)
-  const latestWidgetHRef = useRef<number | null>(null)
-  // A kept-alive node can stay mounted off-screen, so gate the store write on
-  // visibility — otherwise an off-screen widget's resize would grow the node
-  // (and broadcast a collab op) with nothing visible to justify it. The latest
-  // reported height is stashed and flushed when the node returns to view.
-  const inViewRef = useRef(isInView)
-  useEffect(() => {
-    inViewRef.current = isInView
-  }, [isInView])
-
-  const applyHeight = useCallback(
-    (widgetH: number) => {
-      const target = Math.min(widgetH + CARD_CHROME_PX, MAX_AUTO_GROW_PX)
-      const current = store.getNode(id)?.h ?? 0
-      // Grow only, and only by a meaningful delta (avoid storms from
-      // sub-pixel oscillation).
-      if (target <= current + 1) return
-      if (target === lastAppliedHRef.current) return
-      lastAppliedHRef.current = target
-      store.updateNode(id, { h: target })
-    },
-    [id, store],
-  )
-
-  const onContentHeightChange = useCallback(
-    (widgetH: number) => {
-      latestWidgetHRef.current = widgetH
-      if (!inViewRef.current) return
-      pendingHeightRef.current = widgetH
-      if (rafIdRef.current != null) return
-      rafIdRef.current = requestAnimationFrame(() => {
-        rafIdRef.current = null
-        const pending = pendingHeightRef.current
-        pendingHeightRef.current = null
-        if (pending == null) return
-        applyHeight(pending)
-      })
-    },
-    [applyHeight],
-  )
-
-  // Flush the height reported while off-screen when the node returns to view.
-  useEffect(() => {
-    if (isInView && latestWidgetHRef.current != null) applyHeight(latestWidgetHRef.current)
-  }, [isInView, applyHeight])
-
-  useEffect(() => {
-    return () => {
-      if (rafIdRef.current != null) cancelAnimationFrame(rafIdRef.current)
-    }
   }, [])
 
   if (!node) return null
@@ -180,7 +107,6 @@ export function MiniAppView({ id }: MiniAppViewProps) {
                 "h-full w-full bg-transparent",
                 isSelected ? "pointer-events-auto" : "pointer-events-none",
               )}
-              onContentHeightChange={onContentHeightChange}
             />
           ) : (
             <div className="flex h-full w-full flex-col items-center justify-center gap-2 px-4 text-center text-sm text-muted-foreground">

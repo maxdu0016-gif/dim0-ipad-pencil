@@ -322,8 +322,7 @@ export function MiniAppMount({
       style={{
         width: "100%",
         // Fill the parent slot. The slot height is owned by the host: the
-        // canvas card grows to fit the widget (capped at MAX_AUTO_GROW_PX
-        // in the board view). When content exceeds that cap, the iframe's
+        // canvas card retains the user's chosen size. Taller content in the iframe's
         // own document scrolls — styled by the runtime's scrollbar-thin on
         // <html> — instead of being clipped.
         height: "100%",
