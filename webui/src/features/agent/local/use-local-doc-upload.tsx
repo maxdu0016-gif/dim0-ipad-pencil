@@ -21,6 +21,7 @@ import { useBoardAppStore } from "@/features/board/harness/store/board-app-store
 import { addDocumentNode } from "@/features/board/harness/agent/doc-node"
 import { resolveParseClient } from "@/features/agent/engine/doc-parse"
 import { ingestDocument } from "@/features/agent/local/ingest-doc"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 
 
 // Instant client-side reject (saves the upload); the /ai/parse endpoint enforces
@@ -29,15 +30,13 @@ const MAX_FILE_BYTES = 5 * 1024 * 1024
 
 
 export type LocalDocUpload = {
-  /** False when parsing is unavailable (no managed access and no BYOK key) → grey out. */
+  /** Whether the chosen PDF can be parsed with the current service configuration. */
   canParse: boolean
   busy: boolean
-  /** Open the native file picker and ingest the chosen PDF (guards double-pick). */
+  /** Open the import dialog with a directly tappable file input. */
   pick: () => void
   /**
-   * Mount ONCE at the call site: the hidden file input `pick()` clicks (kept in
-   * the DOM so the picker opens on every browser) plus the same-name override
-   * confirm dialog.
+   * Mount once: the PDF import dialog and same-name replacement confirmation.
    */
   elements: ReactNode
 }
@@ -56,7 +55,7 @@ export const useLocalDocUpload = (boardId: string): LocalDocUpload => {
   const signedIn = useIsSignedIn()
   // Raw so the button re-enables the moment a signed-out user saves a key.
   const byokKey = useByokStore((s) => s.parseKey).trim() || null
-  const inputRef = useRef<HTMLInputElement>(null)
+  const [pickerOpen, setPickerOpen] = useState(false)
   // Synchronous re-entrancy guard: `busy` state lags a render, so a rapid second
   // pick could slip through before it flips. A ref closes that window.
   const inFlight = useRef(false)
@@ -111,6 +110,8 @@ export const useLocalDocUpload = (boardId: string): LocalDocUpload => {
         const existing = await docs.findByTitle(boardId, file.name)
         if (existing) setOverride(file)
         else await ingest(file)
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "Couldn't open the document store.")
       } finally {
         inFlight.current = false
       }
@@ -119,23 +120,35 @@ export const useLocalDocUpload = (boardId: string): LocalDocUpload => {
   )
 
   const pick = useCallback((): void => {
-    if (!canParse || busy || inFlight.current) return
-    inputRef.current?.click()
-  }, [canParse, busy])
+    if (busy || inFlight.current) return
+    setPickerOpen(true)
+  }, [busy])
 
   const elements = (
     <>
-      <input
-        ref={inputRef}
-        type="file"
-        accept="application/pdf,.pdf"
-        className="hidden"
-        onChange={(e) => {
-          const file = e.target.files?.[0]
-          e.target.value = "" // allow re-picking the same file
-          if (file) void onPickFile(file)
-        }}
-      />
+      <Dialog open={pickerOpen} onOpenChange={setPickerOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Import PDF</DialogTitle>
+            <DialogDescription>
+              {canParse ? "Choose a PDF up to 5 MB to add to this board." : "Reading PDFs requires a Mistral key in Settings or managed access. Your model API key does not enable PDF parsing."}
+            </DialogDescription>
+          </DialogHeader>
+          <input
+            type="file"
+            aria-label="Choose PDF"
+            accept="application/pdf,.pdf"
+            onChange={(e) => {
+              const file = e.target.files?.[0]
+              e.target.value = ""
+              if (file) {
+                setPickerOpen(false)
+                void onPickFile(file)
+              }
+            }}
+          />
+        </DialogContent>
+      </Dialog>
       <AlertDialog open={override !== null} onOpenChange={(o) => !o && setOverride(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>

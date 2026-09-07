@@ -57,7 +57,12 @@ const BASE_URLS: Record<ByokProvider, string> = {
 export const toOpenAiMessages = (messages: LlmMessage[]): ChatCompletionMessageParam[] =>
   messages.map((m): ChatCompletionMessageParam => {
     if (m.role === "system") return { role: "system", content: m.content }
-    if (m.role === "user") return { role: "user", content: m.content }
+    if (m.role === "user") return {
+      role: "user",
+      content: m.images?.length
+        ? [{ type: "text", text: m.content }, ...m.images.map((url) => ({ type: "image_url" as const, image_url: { url, detail: "high" as const } }))]
+        : m.content,
+    }
     if (m.role === "tool") return { role: "tool", tool_call_id: m.toolCallId, content: m.content }
     return {
       role: "assistant",

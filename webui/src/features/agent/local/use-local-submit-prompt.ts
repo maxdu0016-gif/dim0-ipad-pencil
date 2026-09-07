@@ -42,6 +42,7 @@ import { maybeAutoLabelBoard, maybeDeriveBoardPurpose } from "./describe-board"
 import { maybeRefreshConversationContext, summarizeConversation } from "./conversation-context"
 import { buildBoardSnapshot, readRecentOps, renderBoardSnapshot } from "./board-snapshot"
 import { wrapWithMessageContext } from "./message-context"
+import { captureBoardImage, liveBoardText, supportsBoardVision } from "./live-board-context"
 
 
 /** Submit-time inputs forwarded from the composer; backend-only fields are ignored. */
@@ -72,7 +73,7 @@ const mintId = (): string => `local-${Date.now()}-${counter++}`
  */
 const buildBoardBlock = async (store: CanvasStore, rootId: string | null, boardId: string): Promise<string> => {
   // Auxiliary context — a storage hiccup (transient IDB error, blocked upgrade)
-  // must degrade to an empty block, never abort the turn.
+  // must fall back to the live scene, never discard available board context.
   try {
     const { engine, boards } = await getLocalStores()
     const cursor = await engine.get<SnapshotMetaRecord>("snapshot_meta", boardId)
@@ -88,7 +89,7 @@ const buildBoardBlock = async (store: CanvasStore, rootId: string | null, boardI
     return purpose + rendered
   } catch (e) {
     agentLog.error("buildBoardBlock", e)
-    return ""
+    return renderBoardSnapshot(buildBoardSnapshot(store, rootId, []), { title: "Current board" })
   }
 }
 
@@ -295,7 +296,12 @@ export function useLocalSubmitPrompt(boardId: string, syncTranscript = false) {
         const systemWithMemory = memoryBlock
           ? `${systemWithBoard}\n\n## MEMORY\n<memory>\n${memoryBlock}\n</memory>`
           : systemWithBoard
-        const userMessageForAgent = wrapWithMessageContext(prompt, messageContext)
+        const activeModel = signedIn ? llmModel : byokModel ?? config?.model
+        const boardImage = activeModel && supportsBoardVision(activeModel) ? captureBoardImage() : undefined
+        const visualContext = boardImage
+          ? "Attached image: current visible painted board, including visible photos and ink. Embedded apps and offscreen content are excluded."
+          : "No visual input attached. Do not claim to see photos or handwriting; this configuration needs a supported vision model (gpt-5.4 or gpt-4o) and a capturable board view."
+        const userMessageForAgent = wrapWithMessageContext(prompt, [messageContext, liveBoardText(store), visualContext].filter(Boolean).join("\n\n"))
         // Rolling thread summary (already self-fenced as `## CONVERSATION`), built up
         // front so it counts toward the compaction estimate and stands in for the
         // trimmed turns after compaction.
@@ -392,7 +398,10 @@ export function useLocalSubmitPrompt(boardId: string, syncTranscript = false) {
           liveNodes: new Map<string, { parentId: string | null; type: string }>(),
           sessions: new Map<string, HeadlessMutator>(),
         }
-        for await (const ev of runAgent({ system: systemWithDocs, userMessage: userMessageForAgent, history, tools, llm, ctx })) {
+        const serviceContext = webSearch
+          ? "Web search is available via web_search; use it for requests that need current external information."
+          : "Web search is unavailable in this session. If asked to search online, explain that Settings needs a separate search provider key or managed access. Never claim to have searched."
+        for await (const ev of runAgent({ system: `${systemWithDocs}\n\n${serviceContext}`, userMessage: userMessageForAgent, userImages: boardImage ? [boardImage] : undefined, history, tools, llm, ctx })) {
           // Streaming yields cumulative assistant_text / reasoning per token —
           // replace the previous snapshot in place instead of appending one event
           // per token. (assistant_text renders live; reasoning is shown at turn-end.)

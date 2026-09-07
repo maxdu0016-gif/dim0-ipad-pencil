@@ -10,8 +10,9 @@
 
 @custom-variant dark (&:is([data-mode="dark"] *));
 
-/* Hand mode targets the canvas even over editable cards and embedded iframes. */
-[data-hand-pan] [data-canvas-host] * {
+/* Pan and connection tools target the canvas even over editable cards/iframes. */
+[data-hand-pan] [data-canvas-host] *,
+[data-connect-tool] [data-canvas-host] * {
   pointer-events: none !important;
 }
 

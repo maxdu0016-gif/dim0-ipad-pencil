@@ -90,7 +90,7 @@ const ImageSearchDialogBody = ({
           f.type.startsWith("image/"),
         )
         const base = placementAt()
-        await Promise.all(
+        const results = await Promise.all(
           files.map((file, index) =>
             addImage(file, {
               position: base,
@@ -98,7 +98,7 @@ const ImageSearchDialogBody = ({
             }),
           ),
         )
-        onClose()
+        if (results.some(Boolean)) onClose()
       } finally {
         setIsImporting(false)
         if (fileInputRef.current) fileInputRef.current.value = ""
@@ -117,28 +117,26 @@ const ImageSearchDialogBody = ({
           placeholder="Search Unsplash…"
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          autoFocus
           className="focus-visible:border-secondary-foreground focus-visible:ring-2 focus-visible:ring-secondary-foreground/75"
         />
       </div>
       <div className="px-4 pb-2">
-        <button
-          type="button"
-          onClick={() => fileInputRef.current?.click()}
-          disabled={isImporting}
-          className="flex w-full items-center justify-center gap-2 rounded-md border border-dashed border-muted-foreground/40 bg-muted/30 px-4 py-3 text-sm text-muted-foreground transition-colors hover:border-secondary-foreground/75 hover:bg-muted/50 hover:text-secondary-foreground disabled:cursor-not-allowed disabled:opacity-60"
+        <label
+          className="relative flex w-full items-center justify-center gap-2 rounded-md border border-dashed border-muted-foreground/40 bg-muted/30 px-4 py-3 text-sm text-muted-foreground"
         >
           <ImagePlaceholderIcon className="size-4 shrink-0" />
-          <span>{isImporting ? "Importing…" : "Import from computer"}</span>
-        </button>
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="image/*"
-          multiple
-          className="hidden"
-          onChange={(e) => void handleFilesPicked(e.target.files)}
-        />
+          <span>{isImporting ? "Importing…" : "Import photos"}</span>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            multiple
+            aria-label="Import photos"
+            disabled={isImporting}
+            className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+            onChange={(e) => void handleFilesPicked(e.target.files)}
+          />
+        </label>
       </div>
       <div className="scrollbar-thin h-full w-full flex-1 overflow-y-auto p-4 pt-2">
         {isLoading ? (

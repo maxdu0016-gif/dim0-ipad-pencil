@@ -156,6 +156,7 @@ export async function executeToolCall(
 
 export type RunAgentOptions = {
   userMessage: string
+  userImages?: string[]
   tools: Tool[]
   llm: LlmClient
   ctx: ToolContext
@@ -173,7 +174,7 @@ export async function* runAgent(opts: RunAgentOptions): AsyncGenerator<AgentEven
   const messages: LlmMessage[] = []
   if (opts.system) messages.push({ role: "system", content: opts.system })
   if (opts.history) messages.push(...opts.history)
-  messages.push({ role: "user", content: opts.userMessage })
+  messages.push({ role: "user", content: opts.userMessage, ...(opts.userImages?.length ? { images: opts.userImages } : {}) })
 
   // Per-run confirm memory (declined + approved). Spans all turns, so a retry
   // or a follow-up call in a later round respects the earlier decision.

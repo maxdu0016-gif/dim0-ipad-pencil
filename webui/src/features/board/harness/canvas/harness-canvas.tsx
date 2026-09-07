@@ -470,6 +470,7 @@ export function HarnessCanvas({ local = false }: { local?: boolean } = {}) {
           ref={wrapRef}
           {...handPan}
           data-hand-pan={tool === "pan" && viewMode === "board" ? "" : undefined}
+          data-connect-tool={tool === "arrow" && viewMode === "board" ? "" : undefined}
           className={`absolute inset-0 ${
             tool === "ink" || tool === "eraser"
               ? "select-none [-webkit-touch-callout:none]"

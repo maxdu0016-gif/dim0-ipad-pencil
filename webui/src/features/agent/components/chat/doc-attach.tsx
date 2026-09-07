@@ -8,8 +8,7 @@ import { useLocalDocUpload, Spinner } from "@/features/agent/local/use-local-doc
  * the agent's `doc_search` tool can ground answers in it.
  *
  * All of that lives in `useLocalDocUpload` (shared with the board toolbar's
- * Document item); this is just the composer button. Greys out when parsing is
- * unavailable (no managed access and no BYOK Mistral key).
+ * Document item); the import dialog explains missing parsing configuration.
  */
 export const DocAttachButton = ({ boardId }: { boardId: string }) => {
   const { canParse, busy, pick, elements } = useLocalDocUpload(boardId)
@@ -18,7 +17,7 @@ export const DocAttachButton = ({ boardId }: { boardId: string }) => {
     <>
       <button
         type="button"
-        disabled={!canParse || busy}
+        disabled={busy}
         onClick={pick}
         aria-label="Attach a PDF"
         title={canParse ? "Attach a PDF to ask about it" : "Sign in or add a Mistral key to attach documents"}

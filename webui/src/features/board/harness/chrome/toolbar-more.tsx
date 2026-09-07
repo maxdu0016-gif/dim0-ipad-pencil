@@ -93,10 +93,10 @@ const MoreMenuItems = ({
       </DropdownMenuItem>
       <DropdownMenuItem
         // Local boards use the offline pipeline (OCR → chunks → doc node); the
-        // legacy server dialog is for synced/backend boards only. Grey out when
-        // parsing is unavailable (no managed access and no BYOK Mistral key).
+        // legacy server dialog is for synced/backend boards only. The import
+        // dialog explains missing parsing configuration instead of silently disabling.
         onSelect={() => (localUpload ? upload.pick() : setChromeDialog("document-upload"))}
-        disabled={localUpload && !upload.canParse}
+        disabled={localUpload && upload.busy}
         title={localUpload && !upload.canParse ? "Sign in or add a Mistral key to upload documents" : undefined}
         className="min-h-11 gap-2 text-sm"
       >

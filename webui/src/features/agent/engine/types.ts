@@ -39,7 +39,7 @@ export type LlmToolCall = { id: string; name: string; arguments: string }
 
 export type LlmMessage =
   | { role: "system"; content: string }
-  | { role: "user"; content: string }
+  | { role: "user"; content: string; images?: string[] }
   | { role: "assistant"; content: string; toolCalls?: LlmToolCall[] }
   | { role: "tool"; toolCallId: string; content: string }
 

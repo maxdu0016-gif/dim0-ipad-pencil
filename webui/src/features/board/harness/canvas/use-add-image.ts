@@ -5,6 +5,7 @@ import { uploadImage } from "@/features/board/api/upload-image"
 import { downscaleImage } from "@/features/board/components/flow/utils/downscale-image"
 import { createDefaultNote } from "@/features/board/types/note"
 import { noteToNode } from "../convert/note-to-node"
+import { getLocalStores } from "@/features/local-stores"
 
 
 const IMAGE_NODE_MAX_DIMENSION = 420
@@ -50,7 +51,7 @@ export type AddImageOptions = {
 
 /**
  * Harness-native image insertion: downscale the file client-side,
- * upload via the existing image API, build a Note carrying the
+ * persist locally or upload via the image API, build a Note carrying the
  * resulting data URL, convert + add to the canvas store. Mirrors
  * prod's `useAddImageFromFile` but bypasses the legacy graph-store so
  * the dropped image actually lands on the harness canvas.
@@ -67,7 +68,16 @@ export const useHarnessAddImage = (
         const { blob, width, height, mimeType } = await downscaleImage(file)
         const ext = mimeType === "image/png" ? "png" : "jpg"
         const base = file.name?.replace(/\.[^.]+$/, "") || "image"
-        const { dataUrl } = await uploadImage(blob, `${base}.${ext}`)
+        const { boards } = await getLocalStores()
+        const local = (await boards.getBoard(boardId))?.kind === "local-only"
+        const dataUrl = local
+          ? await new Promise<string>((resolve, reject) => {
+              const reader = new FileReader()
+              reader.onload = () => resolve(String(reader.result))
+              reader.onerror = () => reject(reader.error)
+              reader.readAsDataURL(blob)
+            })
+          : (await uploadImage(blob, `${base}.${ext}`)).dataUrl
         const size = nodeSizeFromImage(width, height)
 
         const center = options.position
