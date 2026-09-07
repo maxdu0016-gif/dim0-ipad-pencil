@@ -8,6 +8,7 @@ import { buildMessageContext } from '../../hooks/use-message-context'
 import { useAppStore } from '@/store'
 import type { BillingPlan } from '@/lib/decode-jwt'
 import { SendButton } from './send-button'
+import { SpeechInput } from './speech-input'
 import TextareaAutosize from 'react-textarea-autosize'
 import { useChat } from '../../hooks/chat-context'
 import { useBoardAppStore } from '@/features/board/harness/store/board-app-store'
@@ -249,6 +250,7 @@ export const InputBar = ({
         </div>
 
         <div className="flex items-center gap-2">
+          <SpeechInput disabled={isStreaming || isSubmitting || showBoardLimitGate} onConfirm={(text) => setInput((current) => [current, text].filter(Boolean).join("\n"))} />
           <span className="hidden select-none px-1 font-mono text-sm text-muted-foreground/70 sm:inline">
             ⌘↵
           </span>

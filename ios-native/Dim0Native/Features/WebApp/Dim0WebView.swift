@@ -20,6 +20,7 @@ struct Dim0WebView: UIViewRepresentable {
         configuration.userContentController.addUserScript(Self.nativeBootstrapScript())
         configuration.userContentController.add(context.coordinator, name: "dim0NativePencil")
         configuration.userContentController.add(context.coordinator, name: "dim0GoogleAuth")
+        configuration.userContentController.add(context.coordinator, name: "dim0Speech")
 
         let webView = PencilAwareWebView(frame: .zero, configuration: configuration)
         webView.navigationDelegate = context.coordinator
@@ -83,6 +84,7 @@ struct Dim0WebView: UIViewRepresentable {
         private let model: Dim0WebAppModel
         private var downloadDestinations: [ObjectIdentifier: URL] = [:]
         private var googleAuthenticationSession: ASWebAuthenticationSession?
+        private let speech = NativeSpeechInput()
         weak var container: NativePencilWebContainer?
 
         init(model: Dim0WebAppModel) {
@@ -109,6 +111,20 @@ struct Dim0WebView: UIViewRepresentable {
                   let body = message.body as? [String: Any],
                   (body["version"] as? NSNumber)?.intValue == 1,
                   let kind = body["kind"] as? String else {
+                return
+            }
+
+            if message.name == "dim0Speech" {
+                guard let id = body["requestId"] as? String, UUID(uuidString: id) != nil else { return }
+                switch kind {
+                case "start":
+                    let locale = body["locale"] as? String ?? Locale.current.identifier
+                    guard locale.count <= 64 else { return }
+                    speech.start(id: id, locale: locale, webView: message.webView)
+                case "stop": speech.stop(id: id)
+                case "cancel": speech.cancel(id: id)
+                default: break
+                }
                 return
             }
 
@@ -323,6 +339,7 @@ struct Dim0WebView: UIViewRepresentable {
         }
 
         func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation?) {
+            speech.cancel()
             model.clearError()
             model.setLoading(true)
             container?.disablePencil()

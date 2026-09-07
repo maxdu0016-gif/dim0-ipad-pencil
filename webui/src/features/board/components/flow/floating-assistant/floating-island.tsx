@@ -9,6 +9,7 @@ import { useChatSubmit } from "@/features/agent/hooks/use-chat-submit"
 import { useChat } from "@/features/agent/hooks/chat-context"
 import { DocAttachButton } from "@/features/agent/components/chat/doc-attach"
 import { SendButton } from "@/features/agent/components/chat/send-button"
+import { SpeechInput } from "@/features/agent/components/chat/speech-input"
 import { buildMessageContext, useHasMessageContext } from "@/features/agent/hooks/use-message-context"
 import { SettingsButton } from "@/features/agent/settings/settings-button"
 import { useHasUsableModel } from "@/features/agent/services/use-agent-availability"
@@ -140,6 +141,7 @@ export const FloatingIsland = ({ boardId, onOpenFullSheet }: FloatingIslandProps
           </div>
           {local && <DocAttachButton boardId={boardId} />}
           <SettingsButton emphasize={!hasModel} />
+          <SpeechInput disabled={isStreaming || isSubmitting || !hasModel} onConfirm={(text) => setInput((current) => [current, text].filter(Boolean).join("\n"))} />
           <SendButton
             type="button"
             loadingStatus={isStreaming || isSubmitting ? "loading" : "loaded"}

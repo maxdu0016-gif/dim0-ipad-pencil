@@ -32,6 +32,7 @@ declare global {
     webkit?: {
       messageHandlers?: {
         dim0NativePencil?: NativeMessageHandler
+        dim0Speech?: NativeMessageHandler
       }
     }
   }
