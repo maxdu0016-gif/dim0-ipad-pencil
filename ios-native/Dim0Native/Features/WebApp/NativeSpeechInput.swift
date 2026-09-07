@@ -125,12 +125,14 @@ final class NativeSpeechInput: NSObject {
         cancel()
     }
 
-    /// Pass structured arguments instead of interpolating recognized speech into executable JavaScript.
+    /// Encode transcript data as JSON using the existing bridge, avoiding the Swift WebKit overlay dependency.
     private func emit(done: Bool, error: String? = nil) {
         guard let requestID else { return }
         var detail: [String: Any] = ["requestId": requestID, "text": text, "done": done]
         if let error { detail["error"] = error }
-        webView?.callAsyncJavaScript("window.dispatchEvent(new CustomEvent('dim0:speech', { detail }))", arguments: ["detail": detail], in: nil, in: .page, completionHandler: nil)
+        guard let data = try? JSONSerialization.data(withJSONObject: detail),
+              let json = String(data: data, encoding: .utf8) else { return }
+        webView?.evaluateJavaScript("window.dispatchEvent(new CustomEvent('dim0:speech', { detail: \(json) }))", completionHandler: nil)
     }
 
     @objc private func interrupted() {
