@@ -4,10 +4,16 @@
    board/components/flow/widget-document.ts still uses the CDN — tracked
    separately.) */
 @import "tailwindcss";
+
 @import "tw-animate-css";
 @source "../node_modules/streamdown/dist/index.js";
 
 @custom-variant dark (&:is([data-mode="dark"] *));
+
+/* Hand mode targets the canvas even over editable cards and embedded iframes. */
+[data-hand-pan] [data-canvas-host] * {
+  pointer-events: none !important;
+}
 
 .minimap-hide-slide {
   display: none;

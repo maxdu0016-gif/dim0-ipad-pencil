@@ -61,6 +61,7 @@ import { useBoardKeyboard } from "./use-board-keyboard"
 import { useCenterFromUrl } from "./use-center-from-url"
 import { useCreateHandlers } from "./use-create-handlers"
 import { useTouchShapeEdit } from "./use-touch-shape-edit"
+import { useHandPan } from "./use-hand-pan"
 import { useHarnessDropFiles } from "./use-drop-files"
 import { useHydrateIconNodes } from "./use-hydrate-icon-nodes"
 import { usePresentationMode } from "./use-presentation-mode"
@@ -125,6 +126,7 @@ export function HarnessCanvas({ local = false }: { local?: boolean } = {}) {
   const theme = useBoardTheme()
   const [ready, setReady] = useState(false)
   const wrapRef = useRef<HTMLDivElement>(null)
+  const handPan = useHandPan(store, tool === "pan" && viewMode === "board")
   useTouchShapeEdit(wrapRef, store)
   // Captured via `<Canvas onRenderer>`; presentation mode toggles
   // `setHideFrames` on this so slide chrome (border + label) drops out
@@ -466,6 +468,8 @@ export function HarnessCanvas({ local = false }: { local?: boolean } = {}) {
       <HarnessWrapRefProvider value={wrapRef}>
         <div
           ref={wrapRef}
+          {...handPan}
+          data-hand-pan={tool === "pan" && viewMode === "board" ? "" : undefined}
           className={`absolute inset-0 ${
             tool === "ink" || tool === "eraser"
               ? "select-none [-webkit-touch-callout:none]"
