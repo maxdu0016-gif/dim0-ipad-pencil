@@ -130,7 +130,7 @@ final class NativeSpeechInput: NSObject {
         guard let requestID else { return }
         var detail: [String: Any] = ["requestId": requestID, "text": text, "done": done]
         if let error { detail["error"] = error }
-        webView?.callAsyncJavaScript("window.dispatchEvent(new CustomEvent('dim0:speech', { detail }))", arguments: ["detail": detail], in: nil, contentWorld: .page)
+        webView?.callAsyncJavaScript("window.dispatchEvent(new CustomEvent('dim0:speech', { detail }))", arguments: ["detail": detail], in: nil, in: .page, completionHandler: nil)
     }
 
     @objc private func interrupted() {
