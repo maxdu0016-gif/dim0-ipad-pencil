@@ -3,11 +3,16 @@ import {
   buildGoogleAuthUrl,
   consumePendingGoogleOAuth,
   initiateWebGoogleSignin,
+  nativeGoogleCallbackURL,
   webGoogleRedirectUri,
 } from "./web-google"
 
 
-afterEach(() => sessionStorage.clear())
+afterEach(() => {
+  sessionStorage.clear()
+  delete window.__DIM0_IOS_NATIVE__
+  delete (window as unknown as { webkit?: unknown }).webkit
+})
 
 
 describe("consumePendingGoogleOAuth", () => {
@@ -54,5 +59,34 @@ describe("initiateWebGoogleSignin", () => {
     expect(stashed.verifier.length).toBeGreaterThan(0)
     expect(typeof stashed.state).toBe("string")
     expect(stashed.state.length).toBeGreaterThan(0)
+  })
+
+  it("hands native iPad authorization to the system-auth bridge", async () => {
+    const messages: unknown[] = []
+    window.__DIM0_IOS_NATIVE__ = { version: 1, platform: "ipad" }
+    ;(window as unknown as { webkit?: unknown }).webkit = {
+      messageHandlers: {
+        dim0GoogleAuth: { postMessage: (message: unknown) => messages.push(message) },
+      },
+    }
+
+    await initiateWebGoogleSignin("web-client-123")
+
+    const message = messages[0] as { kind: string; url: string }
+    expect(message.kind).toBe("dim0.google-auth.start")
+    expect(new URL(message.url).searchParams.get("state")).toMatch(/^dim0-ios:/)
+  })
+})
+
+
+describe("nativeGoogleCallbackURL", () => {
+  it("returns native iPad callbacks to the app without exposing unrelated query data", () => {
+    expect(nativeGoogleCallbackURL("?code=abc&state=dim0-ios%3Astate&scope=profile"))
+      .toBe("com.dim0.canvas.oauth://google/callback?code=abc&state=dim0-ios%3Astate")
+  })
+
+  it("leaves ordinary web callbacks in the browser", () => {
+    expect(nativeGoogleCallbackURL("?code=abc&state=web-state")).toBeNull()
+    expect(nativeGoogleCallbackURL("?state=dim0-ios%3Astate")).toBeNull()
   })
 })

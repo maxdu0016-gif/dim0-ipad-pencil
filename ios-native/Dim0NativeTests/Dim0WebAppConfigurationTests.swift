@@ -23,6 +23,24 @@ final class Dim0WebAppConfigurationTests: XCTestCase {
         ))
     }
 
+    /// Native Google OAuth accepts only the exact provider endpoint and a state-bound app callback.
+    func testNativeGoogleOAuthURLPolicy() throws {
+        XCTAssertTrue(Dim0WebAppConfiguration.isGoogleAuthorizationURL(
+            try XCTUnwrap(URL(string: "https://accounts.google.com/o/oauth2/v2/auth?client_id=test"))
+        ))
+        XCTAssertFalse(Dim0WebAppConfiguration.isGoogleAuthorizationURL(
+            try XCTUnwrap(URL(string: "https://example.com/o/oauth2/v2/auth"))
+        ))
+
+        let callback = try XCTUnwrap(URL(string: "com.dim0.canvas.oauth://google/callback?code=abc&state=dim0-ios%3Astate&scope=profile"))
+        let destination = try XCTUnwrap(Dim0WebAppConfiguration.googleWebCallbackURL(from: callback))
+        XCTAssertEqual(destination.absoluteString,
+                       "https://dim0-ipad-pencil.pages.dev/signin/google/callback?code=abc&state=dim0-ios:state")
+        XCTAssertNil(Dim0WebAppConfiguration.googleWebCallbackURL(
+            from: try XCTUnwrap(URL(string: "com.dim0.canvas.oauth://google/callback?code=abc&state=web-state"))
+        ))
+    }
+
     /// Manual native snapshots retain their board context across bridge round trips.
     func testSnapshotRoundTrip() throws {
         let message = NativePencilInkSnapshot(

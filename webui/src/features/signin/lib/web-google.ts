@@ -1,8 +1,21 @@
 import { makePkce, randomState } from "./pkce"
+import { isIOSNative } from "@/platform"
 
 
 const GOOGLE_AUTH_ENDPOINT = "https://accounts.google.com/o/oauth2/v2/auth"
 const STORAGE_KEY = "google_web_oauth"
+export const NATIVE_GOOGLE_STATE_PREFIX = "dim0-ios:"
+
+
+type NativeGoogleAuthHandler = {
+  postMessage: (message: { version: 1; kind: "dim0.google-auth.start"; url: string }) => void
+}
+
+
+const nativeGoogleAuthHandler = (): NativeGoogleAuthHandler | undefined =>
+  (window as typeof window & {
+    webkit?: { messageHandlers?: { dim0GoogleAuth?: NativeGoogleAuthHandler } }
+  }).webkit?.messageHandlers?.dim0GoogleAuth
 
 
 /** Where Google redirects back to after consent — must match the URI registered
@@ -38,9 +51,32 @@ export function buildGoogleAuthUrl(clientId: string, codeChallenge: string, stat
  */
 export async function initiateWebGoogleSignin(clientId: string): Promise<void> {
   const { verifier, challenge } = await makePkce()
-  const state = randomState()
+  const nativeHandler = isIOSNative() ? nativeGoogleAuthHandler() : undefined
+  const state = `${nativeHandler ? NATIVE_GOOGLE_STATE_PREFIX : ""}${randomState()}`
   sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ verifier, state } satisfies PendingGoogleOAuth))
-  window.location.assign(buildGoogleAuthUrl(clientId, challenge, state))
+  const url = buildGoogleAuthUrl(clientId, challenge, state)
+  if (nativeHandler) {
+    nativeHandler.postMessage({ version: 1, kind: "dim0.google-auth.start", url })
+  } else {
+    window.location.assign(url)
+  }
+}
+
+
+/** Converts the HTTPS Google callback inside iPad's secure auth session into
+ *  the private URL that returns control to the native shell. */
+export function nativeGoogleCallbackURL(search: string): string | null {
+  const params = new URLSearchParams(search)
+  const state = params.get("state")
+  if (!state?.startsWith(NATIVE_GOOGLE_STATE_PREFIX) || (!params.has("code") && !params.has("error"))) {
+    return null
+  }
+  const callback = new URL("com.dim0.canvas.oauth://google/callback")
+  for (const name of ["code", "state", "error"]) {
+    const value = params.get(name)
+    if (value) callback.searchParams.set(name, value)
+  }
+  return callback.toString()
 }
 
 

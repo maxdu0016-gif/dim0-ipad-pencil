@@ -2,6 +2,8 @@ import Foundation
 
 enum Dim0WebAppConfiguration {
     private static let fallbackURL = URL(string: "https://app.dim0.net")!
+    private static let nativeGoogleStatePrefix = "dim0-ios:"
+    static let googleCallbackScheme = "com.dim0.canvas.oauth"
 
     /// Resolves the full Dim0 web application hosted inside the native iPad shell.
     static var appURL: URL {
@@ -52,6 +54,32 @@ enum Dim0WebAppConfiguration {
         }
         let port = url.port ?? (scheme.lowercased() == "https" ? 443 : 80)
         return isTrustedAppOrigin(scheme: scheme, host: host, port: port)
+    }
+
+    /// Accepts only Google's OAuth endpoint when the trusted web app requests native authentication.
+    static func isGoogleAuthorizationURL(_ url: URL) -> Bool {
+        url.scheme?.lowercased() == "https"
+            && url.host?.lowercased() == "accounts.google.com"
+            && url.path == "/o/oauth2/v2/auth"
+    }
+
+    /// Converts a private native OAuth callback back to the configured web callback route.
+    static func googleWebCallbackURL(from callback: URL) -> URL? {
+        guard callback.scheme?.lowercased() == googleCallbackScheme,
+              callback.host?.lowercased() == "google",
+              callback.path == "/callback",
+              let items = URLComponents(url: callback, resolvingAgainstBaseURL: false)?.queryItems,
+              let state = items.first(where: { $0.name == "state" })?.value,
+              state.hasPrefix(nativeGoogleStatePrefix),
+              items.contains(where: { $0.name == "code" || $0.name == "error" }) else {
+            return nil
+        }
+
+        var destination = URLComponents(url: appURL, resolvingAgainstBaseURL: false)
+        destination?.path = "/signin/google/callback"
+        destination?.queryItems = items.filter { ["code", "state", "error"].contains($0.name) }
+        destination?.fragment = nil
+        return destination?.url
     }
 
     /// Accepts HTTPS production URLs and HTTP LAN URLs used by self-hosted development builds.

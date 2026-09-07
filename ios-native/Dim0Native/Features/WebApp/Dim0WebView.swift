@@ -1,3 +1,4 @@
+import AuthenticationServices
 import SwiftUI
 import UIKit
 import WebKit
@@ -17,6 +18,7 @@ struct Dim0WebView: UIViewRepresentable {
         configuration.defaultWebpagePreferences.allowsContentJavaScript = true
         configuration.userContentController.addUserScript(Self.nativeBootstrapScript())
         configuration.userContentController.add(context.coordinator, name: "dim0NativePencil")
+        configuration.userContentController.add(context.coordinator, name: "dim0GoogleAuth")
 
         let webView = PencilAwareWebView(frame: .zero, configuration: configuration)
         webView.navigationDelegate = context.coordinator
@@ -70,11 +72,13 @@ struct Dim0WebView: UIViewRepresentable {
     }
 
     @MainActor
-    final class Coordinator: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownloadDelegate, WKScriptMessageHandler {
+    final class Coordinator: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownloadDelegate,
+        WKScriptMessageHandler, ASWebAuthenticationPresentationContextProviding {
         private static let maximumPencilPassthroughRects = 64
 
         private let model: Dim0WebAppModel
         private var downloadDestinations: [ObjectIdentifier: URL] = [:]
+        private var googleAuthenticationSession: ASWebAuthenticationSession?
         weak var container: NativePencilWebContainer?
 
         init(model: Dim0WebAppModel) {
@@ -87,7 +91,6 @@ struct Dim0WebView: UIViewRepresentable {
             didReceive message: WKScriptMessage
         ) {
             guard message.frameInfo.isMainFrame,
-                  message.name == "dim0NativePencil",
                   Dim0WebAppConfiguration.isTrustedAppOrigin(
                       scheme: message.frameInfo.securityOrigin.protocol,
                       host: message.frameInfo.securityOrigin.host,
@@ -98,6 +101,19 @@ struct Dim0WebView: UIViewRepresentable {
                   let kind = body["kind"] as? String else {
                 return
             }
+
+            if message.name == "dim0GoogleAuth" {
+                guard kind == "dim0.google-auth.start",
+                      let rawURL = body["url"] as? String,
+                      let url = URL(string: rawURL),
+                      Dim0WebAppConfiguration.isGoogleAuthorizationURL(url) else {
+                    return
+                }
+                startGoogleAuthentication(url, webView: message.webView)
+                return
+            }
+
+            guard message.name == "dim0NativePencil" else { return }
 
             if kind == "dim0.native-pencil.sync" {
                 container?.syncNow()
@@ -169,6 +185,43 @@ struct Dim0WebView: UIViewRepresentable {
                     zoom: cameraZoom.doubleValue
                 )
             )
+        }
+
+        /// Runs Google OAuth in Apple's secure browser session and restores the callback in the original web view.
+        private func startGoogleAuthentication(_ url: URL, webView: WKWebView?) {
+            guard googleAuthenticationSession == nil else { return }
+            let session = ASWebAuthenticationSession(
+                url: url,
+                callbackURLScheme: Dim0WebAppConfiguration.googleCallbackScheme
+            ) { [weak self, weak webView] callback, error in
+                Task { @MainActor in
+                    guard let self else { return }
+                    self.googleAuthenticationSession = nil
+                    if let callback,
+                       let destination = Dim0WebAppConfiguration.googleWebCallbackURL(from: callback) {
+                        webView?.load(URLRequest(url: destination))
+                    } else if error != nil {
+                        webView?.reload()
+                    }
+                }
+            }
+            session.presentationContextProvider = self
+            session.prefersEphemeralWebBrowserSession = false
+            googleAuthenticationSession = session
+            if !session.start() {
+                googleAuthenticationSession = nil
+                webView?.reload()
+            }
+        }
+
+        /// Anchors the system authentication sheet to the active iPad window.
+        func presentationAnchor(for session: ASWebAuthenticationSession) -> ASPresentationAnchor {
+            container?.window
+                ?? UIApplication.shared.connectedScenes
+                    .compactMap { $0 as? UIWindowScene }
+                    .flatMap(\.windows)
+                    .first(where: \.isKeyWindow)
+                ?? ASPresentationAnchor()
         }
 
         /// Parses one optional web-control hole while rejecting invalid UIKit geometry.

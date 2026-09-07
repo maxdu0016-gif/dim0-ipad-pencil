@@ -2,7 +2,11 @@ import * as React from "react"
 import { Link } from "@tanstack/react-router"
 import { googleSigninWeb } from "@/api"
 import { Loader2Icon } from "@/components/icons"
-import { consumePendingGoogleOAuth, webGoogleRedirectUri } from "../lib/web-google"
+import {
+  consumePendingGoogleOAuth,
+  nativeGoogleCallbackURL,
+  webGoogleRedirectUri,
+} from "../lib/web-google"
 import { useCompleteSignin } from "../hooks/use-complete-signin"
 
 
@@ -24,6 +28,11 @@ export function GoogleCallbackPage() {
     started.current = true
 
     const params = new URLSearchParams(window.location.search)
+    const nativeCallback = nativeGoogleCallbackURL(window.location.search)
+    if (nativeCallback) {
+      window.location.replace(nativeCallback)
+      return
+    }
     const oauthError = params.get("error")
     const code = params.get("code")
     const state = params.get("state")
