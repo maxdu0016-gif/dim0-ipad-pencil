@@ -42,7 +42,7 @@ import { maybeAutoLabelBoard, maybeDeriveBoardPurpose } from "./describe-board"
 import { maybeRefreshConversationContext, summarizeConversation } from "./conversation-context"
 import { buildBoardSnapshot, readRecentOps, renderBoardSnapshot } from "./board-snapshot"
 import { wrapWithMessageContext } from "./message-context"
-import { captureBoardImage, liveBoardText, supportsBoardVision } from "./live-board-context"
+import { captureBoardImage, liveBoardText, supportsBoardVision, prepareNativeBoardContext } from "./live-board-context"
 
 
 /** Submit-time inputs forwarded from the composer; backend-only fields are ignored. */
@@ -288,6 +288,7 @@ export function useLocalSubmitPrompt(boardId: string, syncTranscript = false) {
       const gate = createFlushGate()
       let turnErrored = false
       try {
+        await prepareNativeBoardContext()
         const system = planSystemPrompt(new Date().toLocaleString())
         // Deterministic board awareness (no LLM), injected as a standing section.
         const boardBlock = await buildBoardBlock(store, rootId, boardId)

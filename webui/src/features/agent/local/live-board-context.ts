@@ -1,6 +1,8 @@
 import type { CanvasStore } from "@canvas-harness/core"
 import { nodeToNote } from "@/features/board/harness/convert/node-to-note"
 import { labelText } from "@/features/board/model"
+import { requestNativePencilSync } from "@/features/ios/native-pencil-bridge"
+import { useBoardAppStore } from "@/features/board/harness/store/board-app-store"
 
 
 /** Include live bodies even if persistence or the snapshot cursor is unavailable. */
@@ -42,4 +44,13 @@ export const captureBoardImage = (): string | undefined => {
     // A cross-origin image may taint the canvas. Text context still works.
     return undefined
   }
+}
+
+
+/** Flush native strokes before reading the board, then let the canvas paint the accepted snapshot. */
+export const prepareNativeBoardContext = async (): Promise<void> => {
+  const board = useBoardAppStore.getState()
+  if (!window.webkit?.messageHandlers?.dim0NativePencil || !board.canEdit || board.viewMode !== "board") return
+  await requestNativePencilSync()
+  await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())))
 }

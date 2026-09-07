@@ -1,11 +1,38 @@
-import { describe, expect, it } from "vitest"
+import { describe, expect, it, vi } from "vitest"
 import { addNode, freshStore } from "@/test/canvas"
 import { asNodeId } from "@canvas-harness/core"
-import { liveBoardText, supportsBoardVision } from "./live-board-context"
+import { liveBoardText, supportsBoardVision, prepareNativeBoardContext } from "./live-board-context"
+import { requestNativePencilSync } from "@/features/ios/native-pencil-bridge"
+import { useBoardAppStore } from "@/features/board/harness/store/board-app-store"
 import { toOpenAiMessages } from "../engine/byok-client"
 
 
+vi.mock("@/features/ios/native-pencil-bridge", () => ({ requestNativePencilSync: vi.fn() }))
+
+
 describe("live board grounding", () => {
+  it("waits for native ink synchronization before capturing the current board", async () => {
+    const previous = window.webkit
+    window.webkit = { messageHandlers: { dim0NativePencil: { postMessage: vi.fn() } } }
+    useBoardAppStore.setState({ canEdit: true, viewMode: "board" })
+    vi.useFakeTimers()
+    try {
+      let accept!: (value: { total: number }) => void
+      vi.mocked(requestNativePencilSync).mockReturnValue(new Promise((resolve) => { accept = resolve }))
+      const finished = vi.fn()
+      const ready = prepareNativeBoardContext().then(finished)
+      await vi.runAllTimersAsync()
+      expect(finished).not.toHaveBeenCalled()
+      accept({ total: 1 })
+      await vi.runAllTimersAsync()
+      await ready
+      expect(finished).toHaveBeenCalledOnce()
+    } finally {
+      window.webkit = previous
+      vi.useRealTimers()
+    }
+  })
+
   it("sends the body of an unselected shape, including edits not yet persisted", () => {
     const store = freshStore()
     addNode(store, "shape", "Course")
