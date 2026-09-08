@@ -20,7 +20,7 @@ export const DocAttachButton = ({ boardId }: { boardId: string }) => {
       <button
         type="button"
         disabled={busy}
-        onClick={pick}
+        onClick={() => pick()}
         aria-label={t("Import document")}
         title={t("Import document")}
         className="flex items-center justify-center rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-secondary-foreground disabled:opacity-40 disabled:pointer-events-none"

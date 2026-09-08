@@ -10,6 +10,12 @@
 
 @custom-variant dark (&:is([data-mode="dark"] *));
 
+/* The canvas owns finger holds; editable fields keep native text menus. */
+[data-board-context-surface] { -webkit-touch-callout: none; }
+[data-board-context-surface] input,
+[data-board-context-surface] textarea,
+[data-board-context-surface] [contenteditable="true"] { -webkit-touch-callout: default; }
+
 /* Pan and connection tools target the canvas even over editable cards/iframes. */
 [data-hand-pan] [data-canvas-host] *,
 [data-connect-tool] [data-canvas-host] * {

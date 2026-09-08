@@ -6,8 +6,16 @@ import {
   type RefObject,
 } from "react"
 import { toast } from "sonner"
-import type { CanvasStore, NodeId, Renderer } from "@canvas-harness/core"
-import { exportSelection, exportSelectionSvg } from "@canvas-harness/core"
+import type { CanvasStore, NodeId, EdgeId, Renderer } from "@canvas-harness/core"
+import { exportSelection, exportSelectionSvg, hitTestAny, screenToWorld, serializeSelection } from "@canvas-harness/core"
+import { useSelection } from "@canvas-harness/react"
+import { useT } from "@/lib/i18n"
+import { bindLongPress } from "./long-press"
+import { pasteBoardText } from "./paste-board-text"
+import { removeNodesSubtree, collectSubtreeIds } from "../graph/subtree"
+import { isDurableDelete } from "../node-types/durable-delete"
+import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog"
+import { Button } from "@/components/ui/button"
 import {
   Clipboard as ClipboardIcon,
   StackMinus as StackMinusIcon,
@@ -42,6 +50,7 @@ import { useHasUsableModel } from "@/features/agent/services/use-agent-availabil
 import { useBoardAppStore } from "../store/board-app-store"
 import { nodeToNote } from "../convert/node-to-note"
 import type { NoteNode } from "@/features/board/types/flow"
+import type { DimNode } from "@/features/board/model"
 
 
 export type CanvasContextMenuProps = {
@@ -54,6 +63,7 @@ export type CanvasContextMenuProps = {
    * are silently skipped in the PNG output (canvas-harness 0.1.15+).
    */
   rendererRef: RefObject<Renderer | null>
+  onImport?: (position: { x: number; y: number }) => void
 }
 
 
@@ -130,7 +140,14 @@ const buildSelectedContextText = (
  * editor inputs) sets the anchor point, and the menu opens (controlled) against
  * a zero-size trigger placed there.
  */
-export function CanvasContextMenu({ wrapRef, store, rendererRef }: CanvasContextMenuProps) {
+export function CanvasContextMenu({ wrapRef, store, rendererRef, onImport }: CanvasContextMenuProps) {
+  const t = useT()
+  const canEdit = useBoardAppStore((s) => s.canEdit)
+  const selected = useSelection()
+  const hasSelection = selected.length > 0
+  const [pasteFallback, setPasteFallback] = useState<{ x: number; y: number } | null>(null)
+  const [pasteText, setPasteText] = useState("")
+  const [deletePending, setDeletePending] = useState(false)
   const boardId = useBoardAppStore((s) => s.boardId)
   // AI actions need an in-browser LLM on local boards; hide the section when no
   // model key is usable (parity with the floating island) instead of offering
@@ -153,28 +170,76 @@ export function CanvasContextMenu({ wrapRef, store, rendererRef }: CanvasContext
 
   const closeMenu = useCallback(() => setMenuPos(null), [])
 
-  // Right-click trigger — only opens when something is selected, and never over
-  // an editor input (so native text editing keeps its own menu).
+  // Shared right-click/long-press trigger; editing text keeps the system menu.
   useEffect(() => {
     const wrap = wrapRef.current
     if (!wrap) return
+    const allowed = (target: EventTarget | null): boolean => {
+      const app = useBoardAppStore.getState()
+      return app.viewMode === "board" && app.tool !== "ink" && app.tool !== "eraser" &&
+        !(target instanceof Element && target.closest("input,textarea,[contenteditable=true],button,[role=menu],[role=dialog],iframe"))
+    }
+    const openAt = (x: number, y: number): void => {
+      const rect = wrap.getBoundingClientRect()
+      const world = screenToWorld({ x: x - rect.left, y: y - rect.top }, store.getCamera())
+      const hit = hitTestAny(store, world, store.getCamera().z)
+      const id = hit ? ("nodeId" in hit ? hit.nodeId : hit.edgeId) : null
+      store.resetInteractionState()
+      if (!id) store.setSelection([])
+      else if (!store.getSelection().includes(id)) store.setSelection([id])
+      setMenuPos({ x, y })
+    }
     const onContext = (e: MouseEvent): void => {
-      const target = e.target as HTMLElement | null
-      if (
-        target &&
-        (target.tagName === "INPUT" ||
-          target.tagName === "TEXTAREA" ||
-          target.isContentEditable)
-      ) {
+      if (!allowed(e.target)) return
+      e.preventDefault()
+      openAt(e.clientX, e.clientY)
+    }
+    const unbind = bindLongPress(wrap, openAt, allowed)
+    wrap.addEventListener("contextmenu", onContext)
+    return () => { unbind(); wrap.removeEventListener("contextmenu", onContext) }
+  }, [wrapRef, store])
+
+  const worldPosition = (): { x: number; y: number } => {
+    const rect = wrapRef.current?.getBoundingClientRect()
+    return screenToWorld({ x: (menuPos?.x ?? 0) - (rect?.left ?? 0), y: (menuPos?.y ?? 0) - (rect?.top ?? 0) }, store.getCamera())
+  }
+  const handleCopy = async (): Promise<void> => {
+    if (selected.some((id) => ["folder", "document"].includes(store.getNode(id as NodeId)?.type ?? ""))) {
+      toast.info(t("Import documents separately; copy a folder's contents instead."))
+      return
+    }
+    try {
+      const clip = serializeSelection(store)
+      if (!clip.nodes.length && !clip.edges.length) {
+        toast.info(t("Select the connected notes to copy this arrow."))
         return
       }
-      if (store.getSelection().length === 0) return
-      e.preventDefault()
-      setMenuPos({ x: e.clientX, y: e.clientY })
-    }
-    wrap.addEventListener("contextmenu", onContext)
-    return () => wrap.removeEventListener("contextmenu", onContext)
-  }, [wrapRef, store])
+      await navigator.clipboard.writeText(JSON.stringify(clip))
+      toast.success(t("Copied to clipboard"))
+    } catch { toast.error(t("Could not access the clipboard. Try the system Copy menu.")) }
+  }
+  const handlePaste = async (): Promise<void> => {
+    if (!canEdit || !boardId) return
+    const at = worldPosition()
+    let text: string
+    try { text = await navigator.clipboard.readText() }
+    catch { setPasteText(""); setPasteFallback(at); return }
+    try { await pasteBoardText(store, text, at, boardId, useBoardAppStore.getState().rootId) }
+    catch (error) { toast.error(t(error instanceof Error ? error.message : "Could not paste.")) }
+  }
+  const removeSelected = (): void => {
+    if (!canEdit) return
+    const ids = store.getSelection()
+    removeNodesSubtree(store, ids.filter((id) => store.getNode(id as NodeId)) as NodeId[])
+    store.batch(() => ids.forEach((id) => { if (store.getEdge(id as EdgeId)) store.removeEdge(id as EdgeId) }))
+    setDeletePending(false)
+  }
+  const handleDelete = (): void => {
+    const roots = selected.filter((id) => store.getNode(id as NodeId)) as NodeId[]
+    const subtree = collectSubtreeIds(store.getAllNodes() as DimNode[], roots)
+    if ([...subtree].some((id) => isDurableDelete(store.getNode(id)?.type))) setDeletePending(true)
+    else removeSelected()
+  }
 
   const selection = useCallback(() => store.getSelection(), [store])
 
@@ -291,6 +356,7 @@ export function CanvasContextMenu({ wrapRef, store, rendererRef }: CanvasContext
   )
 
   return (
+    <>
     <DropdownMenu open={!!menuPos} onOpenChange={(open) => { if (!open) closeMenu() }} modal={false}>
       {/* Zero-size anchor placed at the click point; Radix positions the menu
           against it (with viewport collision) while the canvas keeps its own
@@ -312,36 +378,43 @@ export function CanvasContextMenu({ wrapRef, store, rendererRef }: CanvasContext
         side="bottom"
         sideOffset={2}
         collisionPadding={8}
-        className="min-w-[200px]"
+        className="min-w-[220px] max-h-[70dvh] overflow-y-auto [&_[role=menuitem]]:min-h-11"
         // Don't yank focus to the invisible anchor when closing.
         onCloseAutoFocus={(e) => e.preventDefault()}
         // The content is portaled to <body>, outside the canvas wrap whose
         // listener suppresses the native menu — so suppress it here too.
         onContextMenu={(e) => e.preventDefault()}
       >
-        <DropdownMenuLabel className="text-muted-foreground">Position</DropdownMenuLabel>
-        <DropdownMenuItem onSelect={() => handleSendBackward()}>
+        <DropdownMenuItem disabled={!canEdit} onSelect={() => onImport ? onImport(worldPosition()) : useBoardAppStore.getState().setChromeDialog("document-upload")}>
+          {t("Import document")}
+        </DropdownMenuItem>
+        <DropdownMenuItem disabled={!hasSelection} onSelect={() => void handleCopy()}>{t("Copy")}</DropdownMenuItem>
+        <DropdownMenuItem disabled={!canEdit} onSelect={() => void handlePaste()}>{t("Paste")}</DropdownMenuItem>
+        <DropdownMenuItem disabled={!canEdit || !hasSelection} onSelect={handleDelete}>{t("Delete")}</DropdownMenuItem>
+        {hasSelection && <>
+        <DropdownMenuLabel className="text-muted-foreground">{t("Position")}</DropdownMenuLabel>
+        <DropdownMenuItem disabled={!canEdit} onSelect={() => handleSendBackward()}>
           <StackMinusIcon className="size-4" />
-          Send backward
+          {t("Send backward")}
         </DropdownMenuItem>
-        <DropdownMenuItem onSelect={() => handleSendForward()}>
+        <DropdownMenuItem disabled={!canEdit} onSelect={() => handleSendForward()}>
           <StackPlusIcon className="size-4" />
-          Send forward
+          {t("Send forward")}
         </DropdownMenuItem>
-        <DropdownMenuItem onSelect={() => handleSendToBack()}>
+        <DropdownMenuItem disabled={!canEdit} onSelect={() => handleSendToBack()}>
           <StackMinusIcon className="size-4" />
-          Send to back
+          {t("Send to back")}
         </DropdownMenuItem>
-        <DropdownMenuItem onSelect={() => handleSendToFront()}>
+        <DropdownMenuItem disabled={!canEdit} onSelect={() => handleSendToFront()}>
           <StackPlusIcon className="size-4" />
-          Send to front
+          {t("Send to front")}
         </DropdownMenuItem>
 
         <DropdownMenuSeparator />
-        <DropdownMenuLabel className="text-muted-foreground">Export</DropdownMenuLabel>
+        <DropdownMenuLabel className="text-muted-foreground">{t("Export")}</DropdownMenuLabel>
         <DropdownMenuItem onSelect={() => void handleExportPng()}>
           <ClipboardIcon className="size-4" />
-          Copy selected as PNG
+          {t("Copy selected as PNG")}
         </DropdownMenuItem>
         <DropdownMenuCheckboxItem
           checked={exportTransparent}
@@ -349,14 +422,14 @@ export function CanvasContextMenu({ wrapRef, store, rendererRef }: CanvasContext
           // Toggling shouldn't dismiss the menu.
           onSelect={(e) => e.preventDefault()}
         >
-          Transparent background
+          {t("Transparent background")}
         </DropdownMenuCheckboxItem>
         <DropdownMenuItem onSelect={() => handleExportSvg()}>
           <ImagePlaceholderIcon className="size-4" />
-          Download as SVG
+          {t("Download as SVG")}
         </DropdownMenuItem>
 
-        {showAiSection && (
+        {showAiSection && canEdit && (
           <>
             <DropdownMenuSeparator />
             <DropdownMenuSub>
@@ -428,7 +501,29 @@ export function CanvasContextMenu({ wrapRef, store, rendererRef }: CanvasContext
             )}
           </>
         )}
+        </>}
       </DropdownMenuContent>
     </DropdownMenu>
+    <Dialog open={!!pasteFallback} onOpenChange={(open) => { if (!open) setPasteFallback(null) }}>
+      <DialogContent>
+        <DialogTitle>{t("Paste")}</DialogTitle>
+        <DialogDescription>{t("Touch and hold the field below, choose Paste, then add it to the board.")}</DialogDescription>
+        <textarea aria-label={t("Clipboard content")} rows={5} className="w-full border rounded-md p-3 text-base" value={pasteText} onChange={(event) => setPasteText(event.target.value)} />
+        <Button disabled={!pasteText.trim()} onClick={() => {
+          if (!pasteFallback || !boardId || !canEdit) return
+          void pasteBoardText(store, pasteText, pasteFallback, boardId, useBoardAppStore.getState().rootId)
+            .then(() => setPasteFallback(null)).catch((error: unknown) => toast.error(t(error instanceof Error ? error.message : "Could not paste.")))
+        }}>{t("Add to board")}</Button>
+      </DialogContent>
+    </Dialog>
+    <Dialog open={deletePending} onOpenChange={setDeletePending}>
+      <DialogContent>
+        <DialogTitle>{t("Delete selected items?")}</DialogTitle>
+        <DialogDescription>{t("Documents and folders include stored content. Deleting them cannot be undone.")}</DialogDescription>
+        <Button variant="ghost" onClick={() => setDeletePending(false)}>{t("Cancel")}</Button>
+        <Button variant="destructive" onClick={removeSelected}>{t("Delete")}</Button>
+      </DialogContent>
+    </Dialog>
+    </>
   )
 }

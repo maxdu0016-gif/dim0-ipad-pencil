@@ -36,7 +36,7 @@ export type LocalDocUpload = {
   canParse: boolean
   busy: boolean
   /** Open the import dialog with a directly tappable file input. */
-  pick: () => void
+  pick: (position?: { x: number; y: number }) => void
   importFile: (file: File, position?: { x: number; y: number }) => Promise<void>
   /**
    * Mount once: the PDF import dialog and same-name replacement confirmation.
@@ -144,8 +144,9 @@ export const useLocalDocUpload = (boardId: string): LocalDocUpload => {
     [boardId, busy, ingest, override, t],
   )
 
-  const pick = useCallback((): void => {
+  const pick = useCallback((position?: { x: number; y: number }): void => {
     if (busy || inFlight.current) return
+    positionRef.current = position
     setPickerOpen(true)
   }, [busy])
 
@@ -168,7 +169,7 @@ export const useLocalDocUpload = (boardId: string): LocalDocUpload => {
               e.target.value = ""
               if (file) {
                 setPickerOpen(false)
-                void onPickFile(file)
+                void onPickFile(file, positionRef.current)
               }
             }}
           />

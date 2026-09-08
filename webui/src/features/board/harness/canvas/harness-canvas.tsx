@@ -471,6 +471,7 @@ export function HarnessCanvas({ local = false }: { local?: boolean } = {}) {
       <HarnessWrapRefProvider value={wrapRef}>
         <div
           ref={wrapRef}
+          data-board-context-surface=""
           {...handPan}
           data-hand-pan={tool === "pan" && viewMode === "board" ? "" : undefined}
           data-connect-tool={tool === "arrow" && viewMode === "board" ? "" : undefined}
@@ -495,7 +496,7 @@ export function HarnessCanvas({ local = false }: { local?: boolean } = {}) {
             onDoubleClick={handleDoubleClick}
             onRenderer={handleRenderer}
           />
-          <CanvasContextMenu wrapRef={wrapRef} store={store} rendererRef={rendererRef} />
+          <CanvasContextMenu wrapRef={wrapRef} store={store} rendererRef={rendererRef} onImport={local ? documentUpload.pick : undefined} />
         </div>
       </HarnessWrapRefProvider>
     </CanvasProvider>
