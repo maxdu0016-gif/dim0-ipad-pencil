@@ -15,9 +15,12 @@ import { initiateWebGoogleSignin } from "../lib/web-google"
 import { desktopGoogleSignin } from "../lib/desktop-google"
 import { useCompleteSignin } from "../hooks/use-complete-signin"
 import { isTauri } from "@/platform"
+import { useT } from "@/lib/i18n"
+import { LanguageSetting } from "@/components/language-setting"
 
 /** Renders the sign-in screen and routes successful authentication into the app. */
 export function SigninPage() {
+  const t = useT()
   const completeSignin = useCompleteSignin()
 
   const [email, setEmail] = React.useState("")
@@ -91,13 +94,14 @@ export function SigninPage() {
         <CardHeader className="text-center">
           <CardTitle className="text-2xl flex flex-col items-center justify-center gap-2">
             <img src="/dim0.svg" alt="Dim0 Logo" className="h-12 w-12 aspect-square object-contain" />
-            <span className="text-muted-foreground">Welcome back!</span>
+            <span className="text-muted-foreground">{t("Welcome back!")}</span>
           </CardTitle>
           <CardDescription className="text-muted-foreground">
-            Sign in to continue to your workspace
+            {t("Sign in to continue to your workspace")}
           </CardDescription>
         </CardHeader>
         <CardContent>
+          <LanguageSetting />
           <form
             className="space-y-5"
             onSubmit={e => {
@@ -109,7 +113,7 @@ export function SigninPage() {
             {showLocalSignin ? (
               <>
                 <div className="space-y-2">
-                  <Label htmlFor="email">Email</Label>
+                  <Label htmlFor="email">{t("Email")}</Label>
                   <div className="relative">
                     <Input
                       id="email"
@@ -127,7 +131,7 @@ export function SigninPage() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="password">Password</Label>
+                  <Label htmlFor="password">{t("Password")}</Label>
                   <div className="relative">
                     <PasswordInput
                       id="password"
@@ -152,10 +156,10 @@ export function SigninPage() {
                   {localSigninMutation.isPending ? (
                     <span className="inline-flex items-center gap-2">
                       <Loader2Icon className="h-4 w-4 animate-spin" />
-                      Signing in…
+                      {t("Signing in…")}
                     </span>
                   ) : (
-                    "Sign in"
+                    t("Sign in")
                   )}
                 </Button>
               </>
@@ -164,7 +168,7 @@ export function SigninPage() {
             {showSeparator ? (
               <div className="space-y-3">
                 <Separator />
-                <p className="text-center text-sm text-muted-foreground">or</p>
+                <p className="text-center text-sm text-muted-foreground">{t("or")}</p>
               </div>
             ) : null}
 
@@ -183,12 +187,12 @@ export function SigninPage() {
                   {googleRedirecting ? (
                     <span className="inline-flex items-center gap-2">
                       <Loader2Icon className="h-4 w-4 animate-spin" />
-                      Redirecting to Google…
+                      {t("Redirecting to Google…")}
                     </span>
                   ) : (
                     <span className="inline-flex items-center gap-2">
                       <Google.Color size={18} />
-                      Continue with Google
+                      {t("Continue with Google")}
                     </span>
                   )}
                 </Button>
@@ -210,24 +214,24 @@ export function SigninPage() {
                   {desktopGoogleMutation.isPending ? (
                     <span className="inline-flex items-center gap-2">
                       <Loader2Icon className="h-4 w-4 animate-spin" />
-                      Continue in your browser…
+                      {t("Continue in your browser…")}
                     </span>
                   ) : (
                     <span className="inline-flex items-center gap-2">
                       <Google.Color size={18} />
-                      Continue with Google
+                      {t("Continue with Google")}
                     </span>
                   )}
                 </Button>
                 <p className="text-center text-xs text-muted-foreground">
-                  Opens your browser to sign in, then returns here.
+                  {t("Opens your browser to sign in, then returns here.")}
                 </p>
               </div>
             ) : null}
 
             {!authMethodsQuery.isLoading && !showLocalSignin && !showGoogleWeb && !showGoogleDesktop ? (
               <p className="text-sm text-destructive">
-                No sign-in methods are currently available.
+                {t("No sign-in methods are currently available.")}
               </p>
             ) : null}
 
@@ -238,36 +242,36 @@ export function SigninPage() {
             ) : null}
 
             <p className="text-center text-xs text-muted-foreground">
-              By signing in, you agree to our{" "}
+              {t("By signing in, you agree to our")}{" "}
               <a
                 href="https://www.dim0.net/terms"
                 target="_blank"
                 rel="noreferrer"
                 className="underline underline-offset-2"
               >
-                Terms
+                {t("Terms")}
               </a>{" "}
-              and{" "}
+              {t("and")}{" "}
               <a
                 href="https://www.dim0.net/privacy"
                 target="_blank"
                 rel="noreferrer"
                 className="underline underline-offset-2"
               >
-                Privacy Policy
+                {t("Privacy Policy")}
               </a>
               .
             </p>
 
             <div className="flex items-center justify-between text-sm">
               <span className="text-muted-foreground">
-                Don’t have an account?{" "}
+                {t("Don’t have an account?")}{" "}
                 <Link to="/signup" className="font-medium underline">
-                  Create one
+                  {t("Create one")}
                 </Link>
               </span>
               <Link to="/forgot-password" className="text-muted-foreground underline">
-                Forgot password?
+                {t("Forgot password?")}
               </Link>
             </div>
 

@@ -23,6 +23,7 @@ import {
 } from "@/components/ui/tooltip"
 import { nodeLimitFor } from "@/features/board/lib/board-limit"
 import { cn } from "@/lib/utils"
+import { useT } from "@/lib/i18n"
 import { useAppStore } from "@/store"
 import { useLocalDocUpload, type LocalDocUpload } from "@/features/agent/local/use-local-doc-upload"
 import { useNodeTypeCount } from "../canvas/use-node-type-count"
@@ -64,6 +65,7 @@ const MoreMenuItems = ({
   localUpload: boolean
   upload: LocalDocUpload
 }) => {
+  const t = useT()
   const store = useCanvasStore()
   const userPlan = useAppStore((s) => s.userPlan)
   const setTool = useBoardAppStore((s) => s.setTool)
@@ -78,17 +80,17 @@ const MoreMenuItems = ({
     <>
       <DropdownMenuItem onSelect={() => setChromeDialog("icon-search")} className="min-h-11 gap-2 text-sm">
         <PuzzlePieceIcon className="size-4 shrink-0" />
-        <span>Icons</span>
+        <span>{t("Icons")}</span>
         <DropdownMenuShortcut>G</DropdownMenuShortcut>
       </DropdownMenuItem>
       <DropdownMenuItem onSelect={() => setChromeDialog("image-search")} className="min-h-11 gap-2 text-sm">
         <ImageStackIcon className="size-4 shrink-0" />
-        <span>Images</span>
+        <span>{t("Images")}</span>
         <DropdownMenuShortcut>I</DropdownMenuShortcut>
       </DropdownMenuItem>
       <DropdownMenuItem onSelect={() => setTool("folder")} className="min-h-11 gap-2 text-sm">
         <FolderPlusActionIcon className="size-4 shrink-0" />
-        <span>Sub-board</span>
+        <span>{t("Sub-board")}</span>
         <NodeLimitBadge count={folderCount} limit={nodeLimitFor("folder", userPlan)} />
       </DropdownMenuItem>
       <DropdownMenuItem
@@ -97,21 +99,21 @@ const MoreMenuItems = ({
         // dialog explains missing parsing configuration instead of silently disabling.
         onSelect={() => (localUpload ? upload.pick() : setChromeDialog("document-upload"))}
         disabled={localUpload && upload.busy}
-        title={localUpload && !upload.canParse ? "Sign in or add a Mistral key to upload documents" : undefined}
+        title={localUpload && !upload.canParse ? t("Sign in or add a Mistral key to upload documents") : undefined}
         className="min-h-11 gap-2 text-sm"
       >
         <DocumentFileIcon className="size-4 shrink-0" />
-        <span>Document</span>
+        <span>{t("Document")}</span>
         <NodeLimitBadge count={documentCount} limit={nodeLimitFor("document", userPlan)} />
       </DropdownMenuItem>
       <DropdownMenuItem onSelect={() => setTool("code-sandbox")} className="min-h-11 gap-2 text-sm">
         <CodeFileIcon className="size-4 shrink-0" />
-        <span>Code sandbox</span>
+        <span>{t("Code sandbox")}</span>
         <NodeLimitBadge count={codeSandboxCount} limit={nodeLimitFor("code-sandbox", userPlan)} />
       </DropdownMenuItem>
       <DropdownMenuItem onSelect={() => setTool("mini-app")} className="min-h-11 gap-2 text-sm">
         <CursorClickIcon className="size-4 shrink-0" />
-        <span>Mini-app</span>
+        <span>{t("Mini-app")}</span>
         <NodeLimitBadge count={miniAppCount} limit={nodeLimitFor("mini-app", userPlan)} />
       </DropdownMenuItem>
     </>
@@ -134,6 +136,7 @@ export function HarnessToolbarMore({
   local?: boolean
   side?: "bottom" | "left" | "right"
 } = {}) {
+  const t = useT()
   const chromeDialog = useBoardAppStore((s) => s.chromeDialog)
   const setChromeDialog = useBoardAppStore((s) => s.setChromeDialog)
   const boardId = useBoardAppStore((s) => s.boardId) ?? ""
@@ -155,7 +158,7 @@ export function HarnessToolbarMore({
             <DropdownMenuTrigger asChild>
               <button
                 type="button"
-                aria-label="More actions"
+                aria-label={t("More actions")}
                 className={cn(moreButtonClass, side !== "bottom" && "col-span-2")}
               >
                 <EllipsisIcon className="size-4 shrink-0" />
@@ -167,7 +170,7 @@ export function HarnessToolbarMore({
             side={side}
             sideOffset={10}
           >
-            More actions
+            {t("More actions")}
           </TooltipContent>
         </Tooltip>
         <DropdownMenuContent

@@ -56,6 +56,7 @@ import {
 } from "./toolbar-dock"
 import { HarnessToolbarMore } from "./toolbar-more"
 import { DockableToolbarTray } from "./toolbar-shell"
+import { useT } from "@/lib/i18n"
 
 
 type ShapeTool = {
@@ -143,6 +144,7 @@ function ToolbarSeparator({ dock }: { dock: ToolbarDock }) {
 
 
 export function HarnessToolbar({ local = false }: { local?: boolean } = {}) {
+  const t = useT()
   const store = useCanvasStore()
   const selection = useSelection()
   const tool = useBoardAppStore((s) => s.tool)
@@ -201,7 +203,7 @@ export function HarnessToolbar({ local = false }: { local?: boolean } = {}) {
   const syncNativePencil = async (): Promise<void> => {
     if (pencilSyncing) return
     setPencilSyncing(true)
-    const toastId = toast.loading("正在同步手写…")
+    const toastId = toast.loading(t("Syncing handwriting…"))
 
     try {
       const result = await requestNativePencilSync()
@@ -211,12 +213,12 @@ export function HarnessToolbar({ local = false }: { local?: boolean } = {}) {
 
       toast.success(
         sync
-          ? `手写已保存并进入同步队列（${result.total} 笔）`
-          : `手写已保存到本机（${result.total} 笔）`,
+          ? t("Handwriting saved and queued for sync ({count} strokes)", { count: result.total })
+          : t("Handwriting saved on this device ({count} strokes)", { count: result.total }),
         { id: toastId },
       )
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "手写同步失败，请重试。", { id: toastId })
+      toast.error(error instanceof Error ? error.message : t("Handwriting sync failed. Please try again."), { id: toastId })
     } finally {
       setPencilSyncing(false)
     }
@@ -253,7 +255,7 @@ export function HarnessToolbar({ local = false }: { local?: boolean } = {}) {
       onDockChange={changeDock}
       className="text-sidebar-foreground"
       role="toolbar"
-      aria-label="Board toolbar"
+      aria-label={t("Board toolbar")}
       data-coachmark="toolbar"
     >
       <DropdownMenu open={viewMenuOpen} onOpenChange={setViewMenuOpen}>
@@ -262,7 +264,7 @@ export function HarnessToolbar({ local = false }: { local?: boolean } = {}) {
             <DropdownMenuTrigger asChild>
               <button
                 type="button"
-                aria-label="Change view"
+                aria-label={t("Change view")}
                 aria-pressed={viewMenuOpen}
                 className={cn(
                   viewMenuOpen ? activeClass : inactiveClass,
@@ -271,7 +273,7 @@ export function HarnessToolbar({ local = false }: { local?: boolean } = {}) {
               >
                 <ActiveViewIcon className="size-4 shrink-0" weight="fill" />
                 <span className={cn("sr-only text-[10px]", dock === "top" && "md:not-sr-only")}>
-                  {activeView.label}
+                  {t(activeView.label)}
                 </span>
                 <ChevronDownIcon
                   className={cn(
@@ -283,7 +285,7 @@ export function HarnessToolbar({ local = false }: { local?: boolean } = {}) {
             </DropdownMenuTrigger>
           </TooltipTrigger>
           <TooltipContent className={toolbarTooltipClass} side={popupSide} sideOffset={10}>
-            Change view
+            {t("Change view")}
           </TooltipContent>
         </Tooltip>
         <DropdownMenuContent align="start" side={popupSide} sideOffset={8} className="min-w-[160px]">
@@ -299,7 +301,7 @@ export function HarnessToolbar({ local = false }: { local?: boolean } = {}) {
                   className="size-4 shrink-0"
                   weight={option.id === viewMode ? "fill" : undefined}
                 />
-                <span>{option.label}</span>
+                <span>{t(option.label)}</span>
               </DropdownMenuItem>
             )
           })}
@@ -321,7 +323,7 @@ export function HarnessToolbar({ local = false }: { local?: boolean } = {}) {
           <button
             type="button"
             {...toolSelectionHandlers("pan")}
-            aria-label="Pan"
+            aria-label={t("Pan")}
             aria-pressed={isPan}
             className={isPan ? activeClass : inactiveClass}
           >
@@ -335,7 +337,7 @@ export function HarnessToolbar({ local = false }: { local?: boolean } = {}) {
             </div>
           </button>
         </TooltipTrigger>
-        <TooltipContent className={toolbarTooltipClass} side={popupSide} sideOffset={10}>Pan</TooltipContent>
+        <TooltipContent className={toolbarTooltipClass} side={popupSide} sideOffset={10}>{t("Pan")}</TooltipContent>
       </Tooltip>
 
       <Tooltip>
@@ -343,7 +345,7 @@ export function HarnessToolbar({ local = false }: { local?: boolean } = {}) {
           <button
             type="button"
             {...toolSelectionHandlers("select")}
-            aria-label="Select"
+            aria-label={t("Select")}
             aria-pressed={isSelect}
             className={isSelect ? activeClass : inactiveClass}
           >
@@ -356,7 +358,7 @@ export function HarnessToolbar({ local = false }: { local?: boolean } = {}) {
             </div>
           </button>
         </TooltipTrigger>
-        <TooltipContent className={toolbarTooltipClass} side={popupSide} sideOffset={10}>Select</TooltipContent>
+        <TooltipContent className={toolbarTooltipClass} side={popupSide} sideOffset={10}>{t("Select")}</TooltipContent>
       </Tooltip>
 
       {canEdit && selection.length > 0 && (
@@ -366,9 +368,9 @@ export function HarnessToolbar({ local = false }: { local?: boolean } = {}) {
               type="button"
               onPointerDown={(event) => event.preventDefault()}
               onClick={removeSelection}
-              aria-label={selectedEdgeCount > 0
+              aria-label={t(selectedEdgeCount > 0
                 ? selectedEdgeCount === 1 ? "Delete selected connector" : "Delete selected connectors"
-                : "Delete selection"}
+                : "Delete selection")}
               className={cn(
                 baseButtonClass,
                 "border-destructive/30 text-destructive hover:bg-destructive/10",
@@ -378,7 +380,7 @@ export function HarnessToolbar({ local = false }: { local?: boolean } = {}) {
             </button>
           </TooltipTrigger>
           <TooltipContent className={toolbarTooltipClass} side={popupSide} sideOffset={10}>
-            Delete selection
+            {t("Delete selection")}
           </TooltipContent>
         </Tooltip>
       )}
@@ -392,21 +394,21 @@ export function HarnessToolbar({ local = false }: { local?: boolean } = {}) {
             <button
               type="button"
               {...toolSelectionHandlers("ink")}
-              aria-label="Pen"
+              aria-label={t("Pen")}
               aria-pressed={tool === "ink"}
               className={tool === "ink" ? activeClass : inactiveClass}
             >
               <PencilEditIcon className="size-4 shrink-0" weight={tool === "ink" ? "fill" : undefined} />
             </button>
           </TooltipTrigger>
-          <TooltipContent className={toolbarTooltipClass} side={popupSide} sideOffset={10}>Pen</TooltipContent>
+          <TooltipContent className={toolbarTooltipClass} side={popupSide} sideOffset={10}>{t("Pen")}</TooltipContent>
         </Tooltip>
         {tool === "ink" && (
           <Popover>
             <PopoverTrigger asChild>
               <button
                 type="button"
-                aria-label="Pen settings"
+                aria-label={t("Pen settings")}
                 className="ml-0.5 flex size-11 touch-manipulation items-center justify-center rounded-md hover:bg-secondary/60"
               >
                 <span
@@ -417,7 +419,7 @@ export function HarnessToolbar({ local = false }: { local?: boolean } = {}) {
             </PopoverTrigger>
             <PopoverContent side={popupSide} sideOffset={10} className="w-56 space-y-4">
               <label className="flex items-center justify-between gap-3 text-sm">
-                <span>Color</span>
+                <span>{t("Color")}</span>
                 <input
                   type="color"
                   value={inkColor}
@@ -427,7 +429,7 @@ export function HarnessToolbar({ local = false }: { local?: boolean } = {}) {
               </label>
               <div className="space-y-2">
                 <div className="flex items-center justify-between text-sm">
-                  <span>Width</span>
+                  <span>{t("Width")}</span>
                   <span className="text-muted-foreground">{inkSize}px</span>
                 </div>
                 <Slider
@@ -436,7 +438,7 @@ export function HarnessToolbar({ local = false }: { local?: boolean } = {}) {
                   step={1}
                   value={[inkSize]}
                   onValueChange={([value]) => setInkSize(value)}
-                  aria-label="Pen width"
+                  aria-label={t("Pen width")}
                 />
               </div>
             </PopoverContent>
@@ -449,14 +451,14 @@ export function HarnessToolbar({ local = false }: { local?: boolean } = {}) {
           <button
             type="button"
             {...toolSelectionHandlers("eraser")}
-            aria-label="Eraser"
+            aria-label={t("Eraser")}
             aria-pressed={tool === "eraser"}
             className={tool === "eraser" ? activeClass : inactiveClass}
           >
             <EraserIcon className="size-4 shrink-0" weight={tool === "eraser" ? "fill" : undefined} />
           </button>
         </TooltipTrigger>
-        <TooltipContent className={toolbarTooltipClass} side={popupSide} sideOffset={10}>Eraser</TooltipContent>
+        <TooltipContent className={toolbarTooltipClass} side={popupSide} sideOffset={10}>{t("Eraser")}</TooltipContent>
       </Tooltip>
 
       {isIOSNative() && (
@@ -466,13 +468,13 @@ export function HarnessToolbar({ local = false }: { local?: boolean } = {}) {
               type="button"
               onClick={() => void syncNativePencil()}
               disabled={pencilSyncing}
-              aria-label="Sync handwriting"
+              aria-label={t("Sync handwriting")}
               className={cn(inactiveClass, "disabled:cursor-wait disabled:opacity-60")}
             >
               <LoaderRefreshIcon className={cn("size-4 shrink-0", pencilSyncing && "animate-spin")} />
             </button>
           </TooltipTrigger>
-          <TooltipContent className={toolbarTooltipClass} side={popupSide} sideOffset={10}>同步手写</TooltipContent>
+          <TooltipContent className={toolbarTooltipClass} side={popupSide} sideOffset={10}>{t("Sync handwriting")}</TooltipContent>
         </Tooltip>
       )}
 
@@ -487,7 +489,7 @@ export function HarnessToolbar({ local = false }: { local?: boolean } = {}) {
             <DropdownMenuTrigger asChild>
               <button
                 type="button"
-                aria-label="Add shape"
+                aria-label={t("Add shape")}
                 className={isShape ? activeClass : inactiveClass}
               >
                 <div className="relative flex flex-col items-center gap-0.5">
@@ -506,7 +508,7 @@ export function HarnessToolbar({ local = false }: { local?: boolean } = {}) {
               </button>
             </DropdownMenuTrigger>
           </TooltipTrigger>
-          <TooltipContent className={toolbarTooltipClass} side={popupSide} sideOffset={10}>Shapes</TooltipContent>
+          <TooltipContent className={toolbarTooltipClass} side={popupSide} sideOffset={10}>{t("Shapes")}</TooltipContent>
         </Tooltip>
         <DropdownMenuContent align="center" side={popupSide} sideOffset={8} className="min-w-[180px]">
           {SHAPE_TOOLS.map((s) => {
@@ -518,7 +520,7 @@ export function HarnessToolbar({ local = false }: { local?: boolean } = {}) {
                 className="min-h-11 gap-2 text-sm"
               >
                 <Icon className="size-4 shrink-0" />
-                <span>{s.label}</span>
+                <span>{t(s.label)}</span>
                 {s.shortcut ? <DropdownMenuShortcut>{s.shortcut}</DropdownMenuShortcut> : null}
               </DropdownMenuItem>
             )
@@ -531,7 +533,7 @@ export function HarnessToolbar({ local = false }: { local?: boolean } = {}) {
           <button
             type="button"
             {...toolSelectionHandlers("arrow")}
-            aria-label="Connector"
+            aria-label={t("Connector")}
             aria-pressed={tool === "arrow"}
             className={tool === "arrow" ? activeClass : inactiveClass}
           >
@@ -544,7 +546,7 @@ export function HarnessToolbar({ local = false }: { local?: boolean } = {}) {
             </div>
           </button>
         </TooltipTrigger>
-        <TooltipContent className={toolbarTooltipClass} side={popupSide} sideOffset={10}>Connector</TooltipContent>
+        <TooltipContent className={toolbarTooltipClass} side={popupSide} sideOffset={10}>{t("Connector")}</TooltipContent>
       </Tooltip>
 
       <Tooltip>
@@ -552,7 +554,7 @@ export function HarnessToolbar({ local = false }: { local?: boolean } = {}) {
           <button
             type="button"
             {...toolSelectionHandlers("text")}
-            aria-label="Text"
+            aria-label={t("Text")}
             aria-pressed={tool === "text"}
             className={tool === "text" ? activeClass : inactiveClass}
           >
@@ -565,7 +567,7 @@ export function HarnessToolbar({ local = false }: { local?: boolean } = {}) {
             </div>
           </button>
         </TooltipTrigger>
-        <TooltipContent className={toolbarTooltipClass} side={popupSide} sideOffset={10}>Text</TooltipContent>
+        <TooltipContent className={toolbarTooltipClass} side={popupSide} sideOffset={10}>{t("Text")}</TooltipContent>
       </Tooltip>
 
       <Tooltip>
@@ -573,7 +575,7 @@ export function HarnessToolbar({ local = false }: { local?: boolean } = {}) {
           <button
             type="button"
             {...toolSelectionHandlers("sheet")}
-            aria-label="Note"
+            aria-label={t("Note")}
             aria-pressed={tool === "sheet"}
             className={cn(
               tool === "sheet" ? activeClass : inactiveClass,
@@ -589,7 +591,7 @@ export function HarnessToolbar({ local = false }: { local?: boolean } = {}) {
             </div>
           </button>
         </TooltipTrigger>
-        <TooltipContent className={toolbarTooltipClass} side={popupSide} sideOffset={10}>Note</TooltipContent>
+        <TooltipContent className={toolbarTooltipClass} side={popupSide} sideOffset={10}>{t("Note")}</TooltipContent>
       </Tooltip>
 
       <ToolbarSeparator dock={dock} />
@@ -599,7 +601,7 @@ export function HarnessToolbar({ local = false }: { local?: boolean } = {}) {
           <button
             type="button"
             onClick={() => setSlidesPanelOpen(!slidesPanelOpen)}
-            aria-label="Slides"
+            aria-label={t("Slides")}
             aria-pressed={slidesPanelOpen}
             className={cn(
               slidesPanelOpen ? activeClass : inactiveClass,
@@ -615,7 +617,7 @@ export function HarnessToolbar({ local = false }: { local?: boolean } = {}) {
             </div>
           </button>
         </TooltipTrigger>
-        <TooltipContent className={toolbarTooltipClass} side={popupSide} sideOffset={10}>Slides</TooltipContent>
+        <TooltipContent className={toolbarTooltipClass} side={popupSide} sideOffset={10}>{t("Slides")}</TooltipContent>
       </Tooltip>
 
       <ToolbarSeparator dock={dock} />

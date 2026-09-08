@@ -28,6 +28,7 @@ import { Label } from '@/components/ui/label'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { AlertIcon } from '@/components/icons'
 import { toast } from 'sonner'
+import { useT } from '@/lib/i18n'
 
 export interface InputBarProps {
   attachedBoardId?: string
@@ -86,6 +87,7 @@ export const InputBar = ({
   enableSelectionContext = false,
   autoCreateBoard = false,
 }: InputBarProps) => {
+  const t = useT()
   const { local } = useChat()
   const chatId = useActiveChatId()
   const boardId = useBoardAppStore((s) => s.boardId)
@@ -117,10 +119,10 @@ export const InputBar = ({
   // not on title/content changes. Cheap.
   const hasActiveSurface = useBoardAppStore((s) => Boolean(s.activeNodeSurface))
   const placeholder = showBoardLimitGate
-    ? "You've reached your plan's board limit"
+    ? t("You've reached your plan's board limit")
     : autoCreateBoard
-      ? 'Start a new board with a question…'
-      : 'Ask anything...'
+      ? t('Start a new board with a question…')
+      : t('Ask anything...')
 
   const proceedSend = async (text: string, forceNewChat = false) => {
     const trimmed = text.trim()
@@ -288,7 +290,7 @@ export const InputBar = ({
           ) : inboxBody}
 
           <p className="p-1.5 sm:p-2 text-center text-[11px] text-muted-foreground/80 bg-auto">
-            AI can make mistakes. Verify important details carefully.
+            {t("AI can make mistakes. Verify important details carefully.")}
           </p>
         </div>
       </div>
@@ -297,14 +299,14 @@ export const InputBar = ({
       <Dialog open={showDRDialog} onOpenChange={setShowDRDialog}>
         <DialogContent className="sm:max-w-[560px]">
           <DialogHeader>
-            <DialogTitle>Start a Deep Research in a new chat?</DialogTitle>
+            <DialogTitle>{t("Start a Deep Research in a new chat?")}</DialogTitle>
             <DialogDescription>
-              Deep Research runs longer, may use more tools, and will be created in a <strong>separate chat</strong>. Edit your prompt below before starting.
+              {t("Deep Research takes longer and uses a separate chat. Review your prompt before starting.")}
             </DialogDescription>
           </DialogHeader>
 
           <div className="grid w-full gap-2 py-2">
-            <Label htmlFor="dr-prompt">Your prompt</Label>
+            <Label htmlFor="dr-prompt">{t("Your prompt")}</Label>
             <TextareaAutosize
               id="dr-prompt"
               value={input}
@@ -312,17 +314,17 @@ export const InputBar = ({
               minRows={4}
               maxRows={18}
               className="w-full resize-none rounded-md border border-border/50 shadow-sm bg-background px-3 py-2 text-base outline-none"
-              placeholder="Refine your prompt here..."
+              placeholder={t("Refine your prompt here...")}
               autoFocus
             />
           </div>
 
           <DialogFooter className="gap-2 sm:gap-3">
             <Button variant="ghost" onClick={() => setShowDRDialog(false)} disabled={isSubmitting}>
-              Cancel
+              {t("Cancel")}
             </Button>
             <Button onClick={confirmDeepResearch} disabled={isSubmitting || !input.trim()}>
-              {isSubmitting ? 'Starting…' : 'Start Deep Research'}
+              {t(isSubmitting ? 'Starting…' : 'Start Deep Research')}
             </Button>
           </DialogFooter>
         </DialogContent>

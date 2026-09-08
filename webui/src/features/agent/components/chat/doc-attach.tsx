@@ -1,5 +1,6 @@
 import { DocumentFileIcon } from "@/components/icons"
 import { useLocalDocUpload, Spinner } from "@/features/agent/local/use-local-doc-upload"
+import { useT } from "@/lib/i18n"
 
 
 /**
@@ -11,6 +12,7 @@ import { useLocalDocUpload, Spinner } from "@/features/agent/local/use-local-doc
  * Document item); the import dialog explains missing parsing configuration.
  */
 export const DocAttachButton = ({ boardId }: { boardId: string }) => {
+  const t = useT()
   const { canParse, busy, pick, elements } = useLocalDocUpload(boardId)
 
   return (
@@ -19,8 +21,8 @@ export const DocAttachButton = ({ boardId }: { boardId: string }) => {
         type="button"
         disabled={busy}
         onClick={pick}
-        aria-label="Attach a PDF"
-        title={canParse ? "Attach a PDF to ask about it" : "Sign in or add a Mistral key to attach documents"}
+        aria-label={t("Attach a PDF")}
+        title={t(canParse ? "Attach a PDF to ask about it" : "Sign in or add a Mistral key to attach documents")}
         className="flex items-center justify-center rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-secondary-foreground disabled:opacity-40 disabled:pointer-events-none"
       >
         {busy ? <Spinner /> : <DocumentFileIcon className="size-4" strokeWidth={2} />}

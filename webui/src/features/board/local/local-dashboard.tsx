@@ -5,6 +5,7 @@ import type { BoardMeta } from "@/features/board/model"
 import { formatDateForUI } from "@/features/board/utils/datetime"
 import { BoardKindBadge } from "@/features/board/components/board-kind-badge"
 import { ConfirmDeleteBoardAlert } from "@/components/sidebar/confirm-delete-board"
+import { useT } from "@/lib/i18n"
 
 
 // Local-board card + "new" tile, rendered by the unified BoardsHome dashboard's
@@ -28,6 +29,7 @@ export function LocalBoardCard({
   onEnableSync?: () => void
   syncing?: boolean
 }) {
+  const t = useT()
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(board.title)
   const [confirmingDelete, setConfirmingDelete] = useState(false)
@@ -49,8 +51,8 @@ export function LocalBoardCard({
     >
       <button
         type="button"
-        aria-label="Delete board"
-        title="Delete board"
+        aria-label={t("Delete board")}
+        title={t("Delete board")}
         className="absolute right-2 top-2 z-10 hidden rounded-md bg-background/80 p-1 text-muted-foreground shadow-sm hover:text-destructive group-hover:block"
         onClick={(e) => {
           e.stopPropagation()
@@ -63,8 +65,8 @@ export function LocalBoardCard({
       {onEnableSync && (
         <button
           type="button"
-          aria-label="Enable sync"
-          title="Enable sync — back up + share this board"
+          aria-label={t("Enable sync")}
+          title={t("Enable sync — back up + share this board")}
           disabled={syncing}
           className="absolute left-2 top-2 z-10 hidden items-center gap-1 rounded-md bg-background/80 px-1.5 py-1 text-xs text-muted-foreground shadow-sm hover:text-secondary-foreground disabled:opacity-60 group-hover:flex"
           onClick={(e) => {
@@ -73,7 +75,7 @@ export function LocalBoardCard({
           }}
         >
           <CloudArrowUpIcon className="size-3.5" strokeWidth={2} />
-          {syncing ? "Syncing…" : "Enable sync"}
+          {t(syncing ? "Syncing…" : "Enable sync")}
         </button>
       )}
 
@@ -111,7 +113,7 @@ export function LocalBoardCard({
               e.stopPropagation()
               setEditing(true)
             }}
-            title="Double-click to rename"
+            title={t("Double-click to rename")}
           >
             {board.title || UNTITLED_LABEL}
           </h4>
@@ -145,13 +147,14 @@ export function LocalBoardCard({
 
 /** The "new local board" tile. */
 export function NewLocalBoardCard({ onClick }: { onClick: () => void }) {
+  const t = useT()
   return (
     <div
       className="w-64 h-60 flex flex-col items-center justify-center gap-1 p-1 overflow-hidden rounded-xl bg-transparent hover:bg-accent text-card-foreground border-2 border-dashed border-border hover:border-secondary-foreground hover:ring-2 hover:ring-secondary-foreground/10 shadow-none hover:shadow-sm transition-all cursor-pointer"
       onClick={onClick}
     >
       <AddIcon className="shrink-0 size-6 text-secondary-foreground" strokeWidth={2} />
-      <span className="font-medium text-sm text-secondary-foreground">New Board</span>
+      <span className="font-medium text-sm text-secondary-foreground">{t("New board")}</span>
     </div>
   )
 }

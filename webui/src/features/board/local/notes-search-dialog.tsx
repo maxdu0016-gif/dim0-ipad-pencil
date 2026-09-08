@@ -14,6 +14,7 @@ import { BoardPersistence } from "@/features/board/persist/local/board-persisten
 import { useBoardAppStore } from "@/features/board/harness/store/board-app-store"
 import { toSearchRows, type SearchRow } from "@/features/board/search/notes-search"
 import { centerNoteSearch } from "@/features/board/utils/center-note"
+import { useT } from "@/lib/i18n"
 
 
 /**
@@ -24,6 +25,7 @@ import { centerNoteSearch } from "@/features/board/utils/center-note"
  * the existing URL-driven navigation.
  */
 export function NotesSearchDialog({ boardId }: { boardId: string }) {
+  const t = useT()
   const open = useBoardAppStore((s) => s.chromeDialog === "notes-search")
   const setChromeDialog = useBoardAppStore((s) => s.setChromeDialog)
   const navigate = useNavigate()
@@ -61,12 +63,12 @@ export function NotesSearchDialog({ boardId }: { boardId: string }) {
       onOpenChange={(next) => {
         if (!next) close()
       }}
-      title="Search notes"
-      description="Find a note by title or content and jump to it."
+      title={t("Search notes")}
+      description={t("Find a note by title or content and jump to it.")}
     >
-      <CommandInput placeholder="Search notes…" />
+      <CommandInput placeholder={t("Search notes…")} />
       <CommandList>
-        <CommandEmpty>No notes found.</CommandEmpty>
+        <CommandEmpty>{t("No notes found.")}</CommandEmpty>
         {rows.map((row) => (
           <CommandItem key={row.id} value={row.value} onSelect={() => jump(row)}>
             <div className="flex min-w-0 flex-col">

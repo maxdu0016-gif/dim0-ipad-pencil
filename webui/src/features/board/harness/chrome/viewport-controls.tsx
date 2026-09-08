@@ -30,6 +30,7 @@ import {
   type BoardBackgroundTexture,
 } from "@/features/board/utils/board-background"
 import { useBoardAppStore } from "../store/board-app-store"
+import { useT } from "@/lib/i18n"
 
 
 type TextureOption = {
@@ -57,6 +58,7 @@ const BTN_CLASS =
  * board-app-store instead of react-flow + graph-store.
  */
 export function HarnessViewportControls() {
+  const t = useT()
   const camera = useCamera()
   const store = useCanvasStore()
   const canUndo = useCanUndo()
@@ -109,14 +111,14 @@ export function HarnessViewportControls() {
               type="button"
               onClick={handleResetZoom}
               className={BTN_CLASS}
-              aria-label="Reset zoom to 100%"
+              aria-label={t("Reset zoom to 100%")}
             >
               <span className="min-w-[2.4rem] text-center text-xs font-medium text-secondary-foreground">
                 {zoomPercent}%
               </span>
             </button>
           </TooltipTrigger>
-          <TooltipContent side="top">Reset zoom</TooltipContent>
+          <TooltipContent side="top">{t("Reset zoom")}</TooltipContent>
         </Tooltip>
 
         <Tooltip>
@@ -129,12 +131,12 @@ export function HarnessViewportControls() {
                 BTN_CLASS,
                 !canUndo && "pointer-events-none opacity-50",
               )}
-              aria-label="Undo"
+              aria-label={t("Undo")}
             >
               <ArrowCounterClockwiseIcon className="size-4" weight="bold" />
             </button>
           </TooltipTrigger>
-          <TooltipContent side="top">Undo (Cmd/Ctrl+Z)</TooltipContent>
+          <TooltipContent side="top">{t("Undo")} (Cmd/Ctrl+Z)</TooltipContent>
         </Tooltip>
 
         <Tooltip>
@@ -147,12 +149,12 @@ export function HarnessViewportControls() {
                 BTN_CLASS,
                 !canRedo && "pointer-events-none opacity-50",
               )}
-              aria-label="Redo"
+              aria-label={t("Redo")}
             >
               <ArrowClockwiseIcon className="size-4" weight="bold" />
             </button>
           </TooltipTrigger>
-          <TooltipContent side="top">Redo (Cmd/Ctrl+Shift+Z)</TooltipContent>
+          <TooltipContent side="top">{t("Redo")} (Cmd/Ctrl+Shift+Z)</TooltipContent>
         </Tooltip>
 
         <Popover>
@@ -162,7 +164,7 @@ export function HarnessViewportControls() {
                 <button
                   type="button"
                   className={BTN_CLASS}
-                  aria-label="Board background"
+                  aria-label={t("Board background")}
                 >
                   <span
                     className="size-4 rounded-full border-2 border-secondary-foreground/50"
@@ -171,11 +173,11 @@ export function HarnessViewportControls() {
                 </button>
               </PopoverTrigger>
             </TooltipTrigger>
-            <TooltipContent side="top">Background style</TooltipContent>
+            <TooltipContent side="top">{t("Background style")}</TooltipContent>
           </Tooltip>
           <PopoverContent side="top" align="start" className="w-auto p-2">
             <div className="flex items-center justify-between px-1 text-[11px] font-medium text-muted-foreground">
-              <span>Color</span>
+              <span>{t("Color")}</span>
               <button
                 type="button"
                 className="text-[11px] font-medium text-muted-foreground hover:text-foreground disabled:opacity-50"
@@ -198,7 +200,7 @@ export function HarnessViewportControls() {
               ))}
             </div>
             <div className="mt-3 flex items-center justify-between px-1 text-[11px] font-medium text-muted-foreground">
-              <span>Texture</span>
+              <span>{t("Texture")}</span>
               <button
                 type="button"
                 className="text-[11px] font-medium text-muted-foreground hover:text-foreground disabled:opacity-50"
@@ -220,7 +222,7 @@ export function HarnessViewportControls() {
                       : "bg-muted text-muted-foreground/50 hover:bg-muted/70",
                   )}
                   onClick={() => setBoardBackgroundTexture(option.value)}
-                  aria-label={option.label}
+                  aria-label={t(option.label)}
                 >
                   {option.value === "lines" ? (
                     <GridFourIcon className="size-4" />

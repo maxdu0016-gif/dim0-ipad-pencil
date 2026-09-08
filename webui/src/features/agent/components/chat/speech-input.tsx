@@ -3,17 +3,19 @@ import { MicrophoneIcon } from "@phosphor-icons/react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
+import { useT, useLocaleStore } from "@/lib/i18n"
 
 
 /** Capture native dictation into an editable draft; only explicit confirmation inserts text. */
 export function SpeechInput({ disabled, onConfirm }: { disabled?: boolean; onConfirm: (text: string) => void }) {
+  const t = useT()
   const [open, setOpen] = useState(false)
   const [recording, setRecording] = useState(false)
   const [text, setText] = useState("")
   const [error, setError] = useState("")
   const requestId = useRef<string | null>(null)
   const send = (kind: string, id = requestId.current): void => {
-    if (id) window.webkit?.messageHandlers?.dim0Speech?.postMessage({ version: 1, kind, requestId: id, locale: navigator.language })
+    if (id) window.webkit?.messageHandlers?.dim0Speech?.postMessage({ version: 1, kind, requestId: id, locale: useLocaleStore.getState().locale === "zh-CN" ? "zh-CN" : "en-US" })
   }
 
   useEffect(() => {
@@ -39,7 +41,7 @@ export function SpeechInput({ disabled, onConfirm }: { disabled?: boolean; onCon
   }
   const start = (): void => {
     if (!window.webkit?.messageHandlers?.dim0Speech) {
-      toast.info("此版本尚不支持应用内语音。可先点输入框，使用 iPad 键盘的麦克风听写；检查文字后再发送。")
+      toast.info(t("In-app dictation is unavailable in this version. Use the iPad keyboard microphone, then review the text before sending."))
       return
     }
     requestId.current = crypto.randomUUID()
@@ -51,7 +53,7 @@ export function SpeechInput({ disabled, onConfirm }: { disabled?: boolean; onCon
   }
 
   return <>
-    <button type="button" aria-label="语音转文字" title="语音转文字，检查后发送" disabled={disabled}
+    <button type="button" aria-label={t("Speech to text")} title={t("Dictate, then review before sending")} disabled={disabled}
       onPointerDown={(event) => event.preventDefault()} onClick={start}
       className="inline-flex size-11 shrink-0 items-center justify-center rounded-md hover:bg-accent disabled:opacity-40">
       <MicrophoneIcon className="size-5" />
@@ -59,16 +61,16 @@ export function SpeechInput({ disabled, onConfirm }: { disabled?: boolean; onCon
     <Dialog open={open} onOpenChange={(next) => { if (!next) close() }}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>语音转文字</DialogTitle>
-          <DialogDescription>由 Apple 语音识别转写。结束后可修改文字，放入输入框后再手动发送给 AI。</DialogDescription>
+          <DialogTitle>{t("Speech to text")}</DialogTitle>
+          <DialogDescription>{t("Apple transcribes your speech. Review the draft, insert it, then send it to AI manually.")}</DialogDescription>
         </DialogHeader>
-        <textarea aria-label="语音文字草稿" value={text} onChange={(event) => setText(event.target.value)}
+        <textarea aria-label={t("Speech draft")} value={text} onChange={(event) => setText(event.target.value)}
           readOnly={recording} rows={6} className="w-full rounded-md border p-3 text-base" />
-        <p role="status" className="text-sm">{error || (recording ? "正在听写…" : "请检查和修改文字")}</p>
+        <p role="status" className="text-sm">{error || t(recording ? "Listening…" : "Review and edit the text")}</p>
         <div className="flex justify-end gap-2">
-          <Button variant="ghost" onClick={close}>取消</Button>
-          {recording ? <Button onClick={() => send("stop")}>结束听写</Button>
-            : <Button disabled={!text.trim() || disabled} onClick={() => { onConfirm(text.trim()); close() }}>放入输入框</Button>}
+          <Button variant="ghost" onClick={close}>{t("Cancel")}</Button>
+          {recording ? <Button onClick={() => send("stop")}>{t("Stop dictation")}</Button>
+            : <Button disabled={!text.trim() || disabled} onClick={() => { onConfirm(text.trim()); close() }}>{t("Insert into message")}</Button>}
         </div>
       </DialogContent>
     </Dialog>

@@ -2,6 +2,7 @@ import { Button } from "@/components/ui/button"
 import { LoaderIcon, SendIcon } from "@/components/icons"
 import { cn } from "@/lib/utils"
 import type React from "react"
+import { useT } from "@/lib/i18n"
 
 
 interface SendButtonProps extends React.ComponentProps<typeof Button> {
@@ -13,9 +14,10 @@ export function SendButton({  className,
   loadingStatus = "loaded",
   ...props
 }: SendButtonProps) {
+  const t = useT()
   return (
     <Button
-      aria-label={loadingStatus === "loaded" ? "Send" : "Sending"}
+      aria-label={t(loadingStatus === "loaded" ? "Send" : "Sending")}
       className={cn("rounded-lg flex items-center justify-center shadow-none", className)}
       {...props}
       variant={loadingStatus === "loaded" ? 'default' : "ghost"}

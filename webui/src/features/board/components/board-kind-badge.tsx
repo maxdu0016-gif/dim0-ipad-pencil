@@ -1,5 +1,6 @@
 import { CloudCheckIcon, MonitorIcon } from "@/components/icons"
 import type { BoardKind } from "@/features/board/model"
+import { useT } from "@/lib/i18n"
 
 
 /**
@@ -8,6 +9,7 @@ import type { BoardKind } from "@/features/board/model"
  * so the local/remote distinction is per-board, not just group-header deep.
  */
 export function BoardKindBadge({ kind }: { kind: BoardKind }) {
+  const t = useT()
   const synced = kind === "synced"
   return (
     <span
@@ -17,14 +19,14 @@ export function BoardKindBadge({ kind }: { kind: BoardKind }) {
           ? "bg-sky-500/10 text-sky-600 dark:text-sky-400"
           : "bg-muted text-muted-foreground")
       }
-      title={synced ? "Synced — backed up and shareable" : "On this device only"}
+      title={t(synced ? "Synced — backed up and shareable" : "On this device only")}
     >
       {synced ? (
         <CloudCheckIcon className="size-3 shrink-0" strokeWidth={2} />
       ) : (
         <MonitorIcon className="size-3 shrink-0" strokeWidth={2} />
       )}
-      {synced ? "Synced" : "On device"}
+      {t(synced ? "Synced" : "On device")}
     </span>
   )
 }

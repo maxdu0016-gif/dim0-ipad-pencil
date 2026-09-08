@@ -7,9 +7,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { getBillingSummary, type BillingSummary } from "@/features/user-settings/api/billing"
 import { TierBadge } from "@/features/user-settings/components/tier-badge"
 import { useAppStore } from "@/store"
+import { LanguageSetting } from "@/components/language-setting"
+import { useT, useLocaleStore } from "@/lib/i18n"
 
 
 export function SettingsScreen() {
+  const t = useT()
+  const locale = useLocaleStore((s) => s.locale)
   const navigate = useNavigate()
   const userEmail = useAppStore(s => s.userEmail)
   const userPlan = useAppStore(s => s.userPlan)
@@ -31,26 +35,27 @@ export function SettingsScreen() {
 
   const expiresAtLabel = useMemo(() => {
     if (!billingSummary?.cancel_at_period_end) return null
-    if (!billingSummary.current_period_end) return "Expires at period end"
-    return `Expires on ${new Date(billingSummary.current_period_end).toLocaleDateString()}`
-  }, [billingSummary])
+    if (!billingSummary.current_period_end) return t("Expires at period end")
+    return t("Expires on {date}", { date: new Date(billingSummary.current_period_end).toLocaleDateString(locale) })
+  }, [billingSummary, locale, t])
 
   return (
     <div className="absolute inset-0 overflow-y-auto scrollbar-thin">
       <div className="mx-auto w-full max-w-4xl px-6 py-24 space-y-6">
+        <LanguageSetting />
         <Card>
           <CardHeader>
-            <CardTitle>Profile</CardTitle>
-            <CardDescription>Basic account details</CardDescription>
+            <CardTitle>{t("Profile")}</CardTitle>
+            <CardDescription>{t("Basic account details")}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
             <div className="flex items-center justify-between gap-4">
-              <span className="text-sm text-muted-foreground">Email</span>
+              <span className="text-sm text-muted-foreground">{t("Email")}</span>
               <span className="text-sm font-medium">{userEmail}</span>
             </div>
             {billingActive ? (
               <div className="flex items-center justify-between gap-4">
-                <span className="text-sm text-muted-foreground">Current plan</span>
+                <span className="text-sm text-muted-foreground">{t("Current plan")}</span>
                 <div className="flex items-center gap-2">
                   <TierBadge plan={userPlan} />
                   {expiresAtLabel ? (
@@ -67,12 +72,12 @@ export function SettingsScreen() {
         {billingActive ? (
           <Card className="border-secondary-foreground/60 bg-gradient-to-br from-secondary-foreground/20 via-secondary-foreground/10 to-card">
             <CardHeader>
-              <CardTitle>Billing</CardTitle>
-              <CardDescription>Manage subscription and usage limits</CardDescription>
+              <CardTitle>{t("Billing")}</CardTitle>
+              <CardDescription>{t("Manage subscription and usage limits")}</CardDescription>
             </CardHeader>
             <CardContent>
               <Button onClick={() => navigate({ to: "/settings/billing" })}>
-                Open billing
+                {t("Open billing")}
               </Button>
             </CardContent>
           </Card>

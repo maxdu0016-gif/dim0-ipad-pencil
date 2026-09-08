@@ -1,6 +1,7 @@
 import { ToolsMenuIcon } from "@/components/icons"
 import { cn } from "@/lib/utils"
 import { SettingsDialog } from "./settings-dialog"
+import { useT } from "@/lib/i18n"
 
 
 /**
@@ -8,13 +9,15 @@ import { SettingsDialog } from "./settings-dialog"
  * secondary-foreground with a soft ring — used when no model key is set and the
  * rest of the island is dimmed, to point the user at settings.
  */
-export const SettingsButton = ({ emphasize = false }: { emphasize?: boolean }) => (
+export const SettingsButton = ({ emphasize = false }: { emphasize?: boolean }) => {
+  const t = useT()
+  return (
   <SettingsDialog
     trigger={
       <button
         type="button"
-        title={emphasize ? "Set a model to start" : "Settings"}
-        aria-label="Agent settings"
+        title={t(emphasize ? "Set a model to start" : "Settings")}
+        aria-label={t("Agent settings")}
         className={cn(
           "shrink-0 rounded-lg p-1.5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-secondary-foreground/30",
           emphasize
@@ -27,3 +30,4 @@ export const SettingsButton = ({ emphasize = false }: { emphasize?: boolean }) =
     }
   />
 )
+}

@@ -10,6 +10,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import { useToolConfirm, type ToolConfirmRequest } from "@/features/agent/engine/tool-confirm-store"
+import { useT } from "@/lib/i18n"
 
 
 const asString = (value: unknown): string => (typeof value === "string" ? value : "")
@@ -51,6 +52,7 @@ const describe = (req: ToolConfirmRequest): { title: string; hint: string; previ
  * inject markup.
  */
 export const ToolConfirmDialog = () => {
+  const t = useT()
   const pending = useToolConfirm((s) => s.pending)
   const resolve = useToolConfirm((s) => s.resolve)
   if (!pending) return null
@@ -63,9 +65,9 @@ export const ToolConfirmDialog = () => {
         <AlertDialogHeader>
           <AlertDialogTitle className="flex items-center gap-2">
             <Icon className="size-4 shrink-0 text-primary" strokeWidth={2} />
-            {title}
+            {t(title)}
           </AlertDialogTitle>
-          <AlertDialogDescription>{hint}</AlertDialogDescription>
+          <AlertDialogDescription>{t(hint)}</AlertDialogDescription>
         </AlertDialogHeader>
         {preview && (
           <pre className="max-h-48 overflow-auto whitespace-pre-wrap break-words rounded-lg border border-border bg-muted/40 p-2 text-xs">
@@ -73,11 +75,11 @@ export const ToolConfirmDialog = () => {
           </pre>
         )}
         <AlertDialogFooter>
-          <AlertDialogCancel onClick={() => resolve("deny")}>Don't allow</AlertDialogCancel>
+          <AlertDialogCancel onClick={() => resolve("deny")}>{t("Don't allow")}</AlertDialogCancel>
           {/* "Allow once" gates the next call again; "Allow for this request"
               auto-approves further calls to this tool for the rest of the run. */}
-          <Button variant="outline" onClick={() => resolve("once")}>Allow once</Button>
-          <Button onClick={() => resolve("always")}>Allow for this request</Button>
+          <Button variant="outline" onClick={() => resolve("once")}>{t("Allow once")}</Button>
+          <Button onClick={() => resolve("always")}>{t("Allow for this request")}</Button>
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>

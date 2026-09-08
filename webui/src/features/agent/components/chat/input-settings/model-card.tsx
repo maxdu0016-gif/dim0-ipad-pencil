@@ -9,6 +9,7 @@ import type { LlmOption } from "@/features/agent/types/services"
 import { LockIcon } from "@/components/icons"
 import { clsx } from "clsx"
 import { useShallow } from "zustand/shallow"
+import { useT } from "@/lib/i18n"
 
 type ModelChoiceMenuProps = {
   display?: "icon" | "row"
@@ -42,6 +43,7 @@ const ModelCard: React.FC<{ model: LlmOption }> = ({ model }) => {
  * to create a styled dropdown with model options.
  */
 export const ModelChoiceMenu = ({ display = "icon" }: ModelChoiceMenuProps) => {
+  const t = useT()
   const { llmModel, setLlmModel } = useChatStore()
 
   const availableModels = useChatStore(
@@ -84,7 +86,7 @@ export const ModelChoiceMenu = ({ display = "icon" }: ModelChoiceMenuProps) => {
                   isRow ? (
                     <>
                       <CurrentFamilyIcon size={16} />
-                      <span className="text-xs truncate">Core LLM ({currentLabel})</span>
+                      <span className="text-xs truncate">{t("Core LLM")} ({currentLabel})</span>
                     </>
                   ) : (
                     <CurrentFamilyIcon size={16} />
@@ -94,14 +96,14 @@ export const ModelChoiceMenu = ({ display = "icon" }: ModelChoiceMenuProps) => {
             </SelectTrigger>
           </TooltipTrigger>
         </div>
-        <TooltipContent>Core LLM</TooltipContent>
+        <TooltipContent>{t("Core LLM")}</TooltipContent>
       </Tooltip>
 
       <SelectContent side="top">
         <div className="max-h-[300px] overflow-y-auto scrollbar-thin">
           <SelectGroup>
             <SelectLabel className="text-[11px] uppercase tracking-wide text-muted-foreground">
-              Models
+              {t("Models")}
             </SelectLabel>
           </SelectGroup>
 

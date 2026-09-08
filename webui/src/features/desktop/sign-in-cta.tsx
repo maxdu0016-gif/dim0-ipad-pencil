@@ -2,6 +2,7 @@ import { useNavigate } from "@tanstack/react-router"
 import { SidebarMenuButton } from "@/components/ui/sidebar"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { UserProfileIcon } from "@/components/icons"
+import { useT } from "@/lib/i18n"
 
 
 const CTA_CLASS =
@@ -14,17 +15,18 @@ const CTA_CLASS =
  * reassures that account creation is free and card-less, to lower sign-up friction.
  */
 export function SignInCta() {
+  const t = useT()
   const navigate = useNavigate()
   return (
     <Tooltip>
       <TooltipTrigger asChild>
         <SidebarMenuButton className={CTA_CLASS} onClick={() => navigate({ to: "/signin" })}>
           <UserProfileIcon className="size-4 shrink-0" strokeWidth={2} />
-          <span>Sign in to sync &amp; share</span>
+          <span>{t("Sign in to sync & share")}</span>
         </SidebarMenuButton>
       </TooltipTrigger>
       <TooltipContent side="top">
-        Signing up is completely free — no credit card required
+        {t("Signing up is completely free — no credit card required")}
       </TooltipContent>
     </Tooltip>
   )

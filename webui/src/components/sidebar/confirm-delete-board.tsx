@@ -8,6 +8,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "../ui/alert-dialog"
+import { useT } from "@/lib/i18n"
 
 
 /**
@@ -41,25 +42,26 @@ export function ConfirmDeleteBoardAlert({
   title = "Delete this board?",
   description = "This will permanently delete this board and all its chats. This action cannot be undone.",
 }: ConfirmDeleteBoardAlertProps) {
+  const t = useT()
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>{title}</AlertDialogTitle>
+          <AlertDialogTitle>{t(title)}</AlertDialogTitle>
           <AlertDialogDescription>
-            {description}
+            {t(description)}
           </AlertDialogDescription>
         </AlertDialogHeader>
 
         <AlertDialogFooter>
           <AlertDialogCancel>
-            Cancel
+            {t("Cancel")}
           </AlertDialogCancel>
           <AlertDialogAction
             onClick={onConfirm}
             className="bg-destructive !text-destructive-foreground hover:bg-destructive/90"
           >
-            Delete
+            {t("Delete")}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>

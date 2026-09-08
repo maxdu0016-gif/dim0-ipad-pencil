@@ -1,4 +1,5 @@
 import { cn } from '@/lib/utils'
+import { useT } from '@/lib/i18n'
 import { Suspense, lazy, useEffect, useMemo, useState, type ReactNode } from 'react'
 
 const DotLottieReact = lazy(async () => {
@@ -116,22 +117,23 @@ function WelcomeLayout({
   onShuffle?: () => void
   afterContent?: ReactNode
 }) {
+  const t = useT()
   return (
     <div className={cn('relative w-full flex flex-col items-center justify-center text-center', className)}>
       <div className='flex justify-center'>
         <Oc file={file} />
       </div>
       <div className='mt-2 text-xl text-card-foreground'>
-        <span>{message}</span>
+        <span>{t(message)}</span>
       </div>
       {showShuffle && onShuffle ? (
         <button
           type='button'
           className='mt-3 rounded-md px-3 py-1 text-xs font-medium text-accent-foreground/50 bg-accent hover:bg-muted shadow-sm hover:text-accent-foreground transition-colors'
           onClick={onShuffle}
-          aria-label='Shuffle welcome message'
+          aria-label={t('Shuffle welcome message')}
         >
-          Shuffle
+          {t('Shuffle')}
         </button>
       ) : null}
       {afterContent ? <div className='mt-4 flex justify-center'>{afterContent}</div> : null}
@@ -140,6 +142,7 @@ function WelcomeLayout({
 }
 
 export function WelcomeMessage({ afterContent }: { afterContent?: ReactNode }) {
+  const t = useT()
   const { mascot, reshuffle } = useRandomMascot()
 
   if (!mascot) {
@@ -147,7 +150,7 @@ export function WelcomeMessage({ afterContent }: { afterContent?: ReactNode }) {
       <div className='relative w-full flex flex-col items-center justify-center text-center'>
         <div style={{ width: 100, height: 100 }} />
         <div className='mt-2 text-xl text-card-foreground'>
-          <span>Loading your open‑source sidekick…</span>
+          <span>{t("Loading your assistant…")}</span>
         </div>
       </div>
     )

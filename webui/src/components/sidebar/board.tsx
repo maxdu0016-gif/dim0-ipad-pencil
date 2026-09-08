@@ -20,6 +20,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip"
 import { useAppStore } from "@/store"
 import { FREE_PLAN_BOARD_LIMIT_TOOLTIP, isBoardCreationLimited } from "@/features/board/lib/board-limit"
 import { useListBoards } from "@/features/board/api/list-boards"
+import { useT } from "@/lib/i18n"
 
 /**
  * The open surface (sheet/code-sandbox/widget) — or scoped folder — node id for
@@ -49,6 +50,7 @@ function useActiveTreeId(boardId: string): string | null {
  * Dashboard menu item component
  */
 export function DashboardMenuItem() {
+  const t = useT()
   const navigate = useNavigate()
   const pathname = useRouterState({ select: (s) => s.location.pathname })
 
@@ -66,7 +68,7 @@ export function DashboardMenuItem() {
         isActive={isActive}
       >
         <DashboardAddIcon className="shrink-0 size-4 text-sidebar-icon-2" weight={isActive ? 'fill' : undefined} strokeWidth={2} />
-        <span>Dashboard</span>
+        <span>{t("Dashboard")}</span>
       </SidebarMenuButton>
     </SidebarMenuItem>
   )
@@ -76,6 +78,7 @@ export function DashboardMenuItem() {
  * New board item component
  */
 export function NewBoardItem() {
+  const t = useT()
   const { createBoardAsync } = useCreateBoard()
   const userId = useAppStore(s => s.userId)
   const { data: boards = [] } = useListBoards(userId)
@@ -105,7 +108,7 @@ export function NewBoardItem() {
                 onClick={handleClick}
               >
                 <EditIcon className="text-xs shrink-0 text-sidebar-icon-1/60" strokeWidth={2} />
-                <span>New Board</span>
+                <span>{t("New board")}</span>
               </SidebarMenuButton>
             </span>
           </TooltipTrigger>
@@ -121,7 +124,7 @@ export function NewBoardItem() {
     <SidebarMenuItem>
       <SidebarMenuButton className="text-xs text-secondary-foreground font-medium transition-all" onClick={handleClick}>
         <EditIcon className="text-xs shrink-0 text-sidebar-icon-1" strokeWidth={2} />
-        <span>New Board</span>
+        <span>{t("New board")}</span>
       </SidebarMenuButton>
     </SidebarMenuItem>
   )
@@ -134,6 +137,7 @@ export function NewBoardItem() {
  * is wired by the sidebar to the local registry + navigation.
  */
 export function NewLocalBoardItem({ onClick }: { onClick: () => void }) {
+  const t = useT()
   return (
     <SidebarMenuItem>
       <SidebarMenuButton
@@ -141,7 +145,7 @@ export function NewLocalBoardItem({ onClick }: { onClick: () => void }) {
         onClick={onClick}
       >
         <EditIcon className="text-xs shrink-0 text-sidebar-icon-1" strokeWidth={2} />
-        <span>New board</span>
+        <span>{t("New board")}</span>
       </SidebarMenuButton>
     </SidebarMenuItem>
   )

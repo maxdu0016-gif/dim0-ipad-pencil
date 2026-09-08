@@ -21,6 +21,8 @@ import { useModelCatalog } from "@/features/agent/api/use-model-catalog"
 import { agentResolveContext } from "@/features/agent/engine/services/context"
 import { resolveAllServices, resolveService } from "@/features/agent/engine/services/resolve"
 import type { ServiceKind } from "@/features/agent/engine/services/kinds"
+import { LanguageSetting } from "@/components/language-setting"
+import { useT } from "@/lib/i18n"
 
 
 type SectionId = "general" | "models" | "search" | "code" | "documents"
@@ -61,6 +63,7 @@ const NAV_KIND: Partial<Record<SectionId, ServiceKind>> = {
  * key section. The provider sections hold BYOK keys. "Our keys first."
  */
 export function SettingsDialog({ trigger }: { trigger: React.ReactNode }) {
+  const t = useT()
   const [section, setSection] = useState<SectionId>("general")
   useModelCatalog() // public model list — populates the picker for everyone
   useListAvailableServices() // signed-in: search/code/tool availability
@@ -86,11 +89,11 @@ export function SettingsDialog({ trigger }: { trigger: React.ReactNode }) {
     <Dialog>
       <DialogTrigger render={trigger as React.ReactElement} />
       <DialogContent className="w-[min(760px,calc(100vw-2rem))] max-w-none overflow-hidden rounded-2xl p-0">
-        <DialogTitle className="sr-only">Agent settings</DialogTitle>
+        <DialogTitle className="sr-only">{t("Agent settings")}</DialogTitle>
         <div className="flex h-[min(560px,80vh)]">
           <nav className="flex w-44 shrink-0 flex-col border-r border-border bg-sidebar/60 p-2">
             <div className="px-2 pb-2 pt-1 text-[11px] font-mono uppercase tracking-wider text-muted-foreground">
-              Settings
+              {t("Settings")}
             </div>
             {NAV.map(({ id, label, icon: Icon }) => {
               const kind = NAV_KIND[id]
@@ -107,7 +110,7 @@ export function SettingsDialog({ trigger }: { trigger: React.ReactNode }) {
                 )}
               >
                 <Icon className="size-4 shrink-0" />
-                <span className="truncate">{label}</span>
+                <span className="truncate">{t(label)}</span>
                 {kind && (
                   <span className="ml-auto shrink-0">
                     <StatusDot usable={resolutions[kind].mode !== "off"} />
@@ -118,7 +121,7 @@ export function SettingsDialog({ trigger }: { trigger: React.ReactNode }) {
             })}
             <ForgetKeysButton />
           </nav>
-          <div className="flex-1 overflow-y-auto p-5 scrollbar-thin">
+          <div className="min-w-0 flex-1 overflow-y-auto p-5 scrollbar-thin">
             {section === "general" && <GeneralPane onNavigate={setSection} />}
             {section === "models" && <ProvidersPane />}
             {section === "search" && <SearchPane />}
@@ -134,6 +137,7 @@ export function SettingsDialog({ trigger }: { trigger: React.ReactNode }) {
 
 /** Forget every BYOK key stored on this device (the persistence safety valve). */
 function ForgetKeysButton() {
+  const t = useT()
   const clear = useByokStore((s) => s.clear)
   const hasKeys = useByokStore(
     (s) =>
@@ -149,7 +153,7 @@ function ForgetKeysButton() {
       disabled={!hasKeys}
       className="mt-auto rounded-lg px-2.5 py-2 text-left text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-40"
     >
-      Forget keys on this device
+      {t("Forget keys on this device")}
     </button>
   )
 }
@@ -157,20 +161,22 @@ function ForgetKeysButton() {
 
 /** Usable/not status dot — green when the service resolves, red otherwise. */
 function StatusDot({ usable }: { usable: boolean }) {
+  const t = useT()
   return (
     <span
       className={cn("size-2 shrink-0 rounded-full", usable ? "bg-emerald-500" : "bg-red-500")}
-      aria-label={usable ? "usable" : "not set up"}
+      aria-label={t(usable ? "usable" : "not set up")}
     />
   )
 }
 
 
 function PaneTitle({ title, hint }: { title: string; hint?: string }) {
+  const t = useT()
   return (
     <div className="mb-4">
-      <h2 className="text-base font-semibold">{title}</h2>
-      {hint && <p className="mt-0.5 text-xs text-muted-foreground">{hint}</p>}
+      <h2 className="text-base font-semibold">{t(title)}</h2>
+      {hint && <p className="mt-0.5 text-xs text-muted-foreground">{t(hint)}</p>}
     </div>
   )
 }
@@ -178,6 +184,7 @@ function PaneTitle({ title, hint }: { title: string; hint?: string }) {
 
 /** General: the active model + a per-tool usable marker with a shortcut to keys. */
 function GeneralPane({ onNavigate }: { onNavigate: (s: SectionId) => void }) {
+  const t = useT()
   const signedIn = useIsSignedIn()
   const configured = useByokStore((s) => s.configured)
   const asConfig = useByokStore((s) => s.asConfig)
@@ -206,17 +213,18 @@ function GeneralPane({ onNavigate }: { onNavigate: (s: SectionId) => void }) {
   return (
     <div>
       <PaneTitle title="General" hint="We use our keys by default. Add your own under each service." />
+      <LanguageSetting />
 
       <div className="mb-1 flex items-center gap-2">
         <StatusDot usable={modelUsable} />
-        <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Model</span>
+        <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{t("Model")}</span>
       </div>
       <div className="rounded-lg border border-border">
         <ModelChoiceMenu display="row" />
       </div>
       {modelUsable ? (
         <p className="mb-5 mt-1.5 text-[11px] text-muted-foreground">
-          Auto picks a model per task. Signed-in models come from our catalog; a BYOK key adds your own.
+          {t("Auto picks a model per task. Signed-in models come from our catalog; a BYOK key adds your own.")}
         </p>
       ) : (
         <button
@@ -224,11 +232,11 @@ function GeneralPane({ onNavigate }: { onNavigate: (s: SectionId) => void }) {
           onClick={() => onNavigate("models")}
           className="mb-5 mt-1.5 text-[11px] font-medium text-secondary-foreground underline-offset-2 hover:underline"
         >
-          Set a model key →
+          {t("Set a model key →")}
         </button>
       )}
 
-      <div className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Tools</div>
+      <div className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">{t("Tools")}</div>
       <div className="divide-y divide-border/60 rounded-lg border border-border">
         {tools.map(({ kind, label, icon: Icon, section }) => {
           const mode = resolutions[kind].mode
@@ -237,7 +245,7 @@ function GeneralPane({ onNavigate }: { onNavigate: (s: SectionId) => void }) {
               <span className="flex items-center gap-2 text-sm">
                 <StatusDot usable={mode !== "off"} />
                 <Icon className="size-4 shrink-0 text-muted-foreground" />
-                {label}
+                {t(label)}
               </span>
               {mode === "managed" ? (
                 <Chip tone="managed" label="Our keys" />
@@ -249,10 +257,10 @@ function GeneralPane({ onNavigate }: { onNavigate: (s: SectionId) => void }) {
                   onClick={() => onNavigate(section)}
                   className="text-xs font-medium text-secondary-foreground underline-offset-2 hover:underline"
                 >
-                  Set a key →
+                  {t("Set a key →")}
                 </button>
               ) : (
-                <span className="text-xs text-muted-foreground">Needs an account</span>
+                <span className="text-xs text-muted-foreground">{t("Needs an account")}</span>
               )}
             </div>
           )
@@ -264,6 +272,7 @@ function GeneralPane({ onNavigate }: { onNavigate: (s: SectionId) => void }) {
 
 
 function Chip({ tone, label }: { tone: "managed" | "byok"; label: string }) {
+  const t = useT()
   return (
     <span
       className={cn(
@@ -271,7 +280,7 @@ function Chip({ tone, label }: { tone: "managed" | "byok"; label: string }) {
         tone === "managed" ? "bg-secondary text-secondary-foreground" : "border border-border text-foreground",
       )}
     >
-      {label}
+      {t(label)}
     </span>
   )
 }
@@ -293,16 +302,17 @@ function ProvidersPane() {
  * on purpose — trusting web search shouldn't silently trust code execution.
  */
 function TrustToolRow({ tool, title, description }: { tool: ConfirmToolName; title: string; description: string }) {
+  const t = useT()
   const on = useToolTrustStore((s) => s.autoAllow[tool])
   const setAutoAllow = useToolTrustStore((s) => s.setAutoAllow)
 
   return (
     <div className="mb-4 flex items-center justify-between gap-3 rounded-lg border border-border px-3 py-2.5">
       <div className="min-w-0">
-        <div className="text-sm">{title}</div>
-        <div className="text-[11px] text-muted-foreground">{description}</div>
+        <div className="text-sm">{t(title)}</div>
+        <div className="text-[11px] text-muted-foreground">{t(description)}</div>
       </div>
-      <Switch checked={on} onCheckedChange={(v) => setAutoAllow(tool, v)} label={title} />
+      <Switch checked={on} onCheckedChange={(v) => setAutoAllow(tool, v)} label={t(title)} />
     </div>
   )
 }
@@ -315,6 +325,7 @@ function TrustToolRow({ tool, title, description }: { tool: ConfirmToolName; tit
  * if none is picked the resolver takes the first available.
  */
 function SearchPane() {
+  const t = useT()
   const signedIn = useIsSignedIn()
   const engine = useByokStore((s) => s.searchEngine)
   const keys = useByokStore((s) => s.search)
@@ -369,7 +380,7 @@ function SearchPane() {
               </span>
               {isActive && (
                 <span className="text-[11px] font-medium text-secondary-foreground">
-                  {isUsable ? "Selected" : "Add key ↓"}
+                  {t(isUsable ? "Selected" : "Add key ↓")}
                 </span>
               )}
             </button>
@@ -377,7 +388,7 @@ function SearchPane() {
         })}
       </div>
 
-      <label className="mb-1 block text-xs font-medium text-muted-foreground">Your {active.label} key</label>
+      <label className="mb-1 block text-xs font-medium text-muted-foreground">{t("Your {provider} key", { provider: active.label })}</label>
       <div className="flex gap-2">
         <input
           type="password"
@@ -457,6 +468,7 @@ function DocumentsPane() {
 
 
 function SaveButton({ disabled, onClick }: { disabled: boolean; onClick: () => void }) {
+  const t = useT()
   return (
     <button
       type="button"
@@ -464,7 +476,7 @@ function SaveButton({ disabled, onClick }: { disabled: boolean; onClick: () => v
       disabled={disabled}
       className="shrink-0 rounded-lg border border-border px-3 py-1.5 text-sm font-medium transition hover:bg-accent disabled:opacity-40"
     >
-      Save
+      {t("Save")}
     </button>
   )
 }

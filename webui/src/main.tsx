@@ -10,6 +10,9 @@ import { registerSW } from 'virtual:pwa-register'
 import { isIOSNative, isTauri, isWebKitWebview } from './platform'
 import { initNativePencilBridge } from './features/ios/native-pencil-bridge'
 import { initNativeViewport } from './features/ios/native-viewport'
+import { initLanguage } from './lib/i18n'
+
+initLanguage()
 
 /**
  * Registers the PWA service worker and keeps it up to date automatically.

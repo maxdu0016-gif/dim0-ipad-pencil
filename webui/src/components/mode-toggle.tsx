@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { useTheme } from "@/components/theme-provider"
 import { type Mode, type ThemeMeta } from "@/components/theme-constants"
+import { useT } from "@/lib/i18n"
 
 
 type SwatchTrio = ThemeMeta["swatchLight"]
@@ -44,6 +45,7 @@ const MODES: { id: Mode; label: string; Icon: typeof SunIcon }[] = [
  * dropdown groups theme selection on top and mode selection below.
  */
 export function ModeToggle(props: React.ComponentProps<typeof Button>) {
+  const translate = useT()
   const { themeId, mode, resolvedTheme, themes, setThemeId, setMode } = useTheme()
   const activeTheme = themes.find((t) => t.id === themeId) ?? themes[0]
   const activeSwatch = resolvedTheme === "dark" ? activeTheme.swatchDark : activeTheme.swatchLight
@@ -58,11 +60,11 @@ export function ModeToggle(props: React.ComponentProps<typeof Button>) {
           {...props}
         >
           <Swatches colors={activeSwatch} />
-          <span className="sr-only">Theme and mode</span>
+          <span className="sr-only">{translate("Theme and mode")}</span>
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className='min-w-[180px]'>
-        <DropdownMenuLabel className='text-xs text-muted-foreground font-normal'>Theme</DropdownMenuLabel>
+        <DropdownMenuLabel className='text-xs text-muted-foreground font-normal'>{translate("Theme")}</DropdownMenuLabel>
         {themes.map((t) => {
           const swatch = resolvedTheme === "dark" ? t.swatchDark : t.swatchLight
           const isActive = t.id === themeId
@@ -75,13 +77,13 @@ export function ModeToggle(props: React.ComponentProps<typeof Button>) {
           )
         })}
         <DropdownMenuSeparator />
-        <DropdownMenuLabel className='text-xs text-muted-foreground font-normal'>Mode</DropdownMenuLabel>
+        <DropdownMenuLabel className='text-xs text-muted-foreground font-normal'>{translate("Mode")}</DropdownMenuLabel>
         {MODES.map(({ id, label, Icon }) => {
           const isActive = id === mode
           return (
             <DropdownMenuItem key={id} onClick={() => setMode(id)} className='gap-2'>
               <Icon className='h-4 w-4' />
-              <span className='flex-1'>{label}</span>
+              <span className='flex-1'>{translate(label)}</span>
               {isActive ? <CheckmarkIcon className='h-3.5 w-3.5' /> : null}
             </DropdownMenuItem>
           )

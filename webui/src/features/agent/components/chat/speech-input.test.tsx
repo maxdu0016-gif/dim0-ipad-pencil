@@ -2,6 +2,7 @@ import { act } from "react"
 import { createRoot } from "react-dom/client"
 import { expect, it, vi } from "vitest"
 import { SpeechInput } from "./speech-input"
+import { useLocaleStore } from "@/lib/i18n"
 
 
 vi.mock("@phosphor-icons/react", () => ({ MicrophoneIcon: () => null }))
@@ -24,6 +25,7 @@ it("keeps speech as a draft until confirmation and ignores stale recognition eve
     act(() => button.click())
   }
   try {
+    useLocaleStore.getState().setLanguage("zh-CN")
     act(() => root.render(<SpeechInput onConfirm={onConfirm} />))
     click("语音转文字")
     const { requestId } = postMessage.mock.calls[0][0] as { requestId: string }
@@ -31,6 +33,7 @@ it("keeps speech as a draft until confirmation and ignores stale recognition eve
     expect(onConfirm).not.toHaveBeenCalled()
     click("结束听写")
     expect(postMessage).toHaveBeenLastCalledWith(expect.objectContaining({ kind: "stop", requestId }))
+    expect(postMessage.mock.calls[0][0]).toMatchObject({ locale: "zh-CN" })
     act(() => { window.dispatchEvent(new CustomEvent("dim0:speech", { detail: { requestId, text: "请总结白板上的笔记", done: true } })) })
     act(() => { window.dispatchEvent(new CustomEvent("dim0:speech", { detail: { requestId: "stale", text: "wrong", done: true } })) })
     expect(onConfirm).not.toHaveBeenCalled()
@@ -42,5 +45,6 @@ it("keeps speech as a draft until confirmation and ignores stale recognition eve
     container.remove()
     window.webkit = oldWebkit
     globals.IS_REACT_ACT_ENVIRONMENT = previous
+    useLocaleStore.getState().setLanguage("system")
   }
 })

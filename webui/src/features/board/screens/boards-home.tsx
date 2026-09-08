@@ -14,6 +14,7 @@ import { LocalBoardCard, NewLocalBoardCard } from "../local/local-dashboard"
 import { useLocalBoards } from "../local/use-local-boards"
 import { useEnableSync } from "../local/use-enable-sync"
 import { partitionBoards } from "./partition-boards"
+import { useT } from "@/lib/i18n"
 
 
 /**
@@ -134,22 +135,23 @@ function Section({
   footer?: string | null
   children: ReactNode
 }) {
+  const t = useT()
   return (
     <section>
       <div className="mb-3">
-        <h3 className="text-sm font-semibold text-foreground">{title}</h3>
-        {hint && <p className="text-xs text-muted-foreground">{hint}</p>}
+        <h3 className="text-sm font-semibold text-foreground">{t(title)}</h3>
+        {hint && <p className="text-xs text-muted-foreground">{t(hint)}</p>}
       </div>
       <div
         className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 place-items-center"
         role="list"
-        aria-label={title}
+        aria-label={t(title)}
       >
         {children}
       </div>
       {footer && (
         <div className="text-center mt-6 text-muted-foreground text-sm">
-          {footer}
+          {t(footer)}
         </div>
       )}
     </section>
@@ -171,23 +173,24 @@ function CardCell({ children }: { children: ReactNode }) {
  * would, and ignoring it costs nothing (local-first stays the default).
  */
 function SyncedSignInCta({ onSignIn }: { onSignIn: () => void }) {
+  const t = useT()
   return (
     <div className="w-64 h-60 flex flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed border-border p-6 text-center">
       <CloudArrowUpIcon className="size-8 text-muted-foreground" strokeWidth={2} />
       <div className="space-y-1">
-        <p className="text-sm font-medium text-foreground">Sync &amp; share your boards</p>
+        <p className="text-sm font-medium text-foreground">{t("Sync & share your boards")}</p>
         <p className="text-xs text-muted-foreground">
-          Sign in to back them up and open them on any device.
+          {t("Sign in to back them up and open them on any device.")}
         </p>
       </div>
       <Tooltip>
         <TooltipTrigger asChild>
           <Button variant="secondary" size="sm" onClick={onSignIn}>
-            Sign in
+            {t("Sign in")}
           </Button>
         </TooltipTrigger>
         <TooltipContent>
-          Signing up is completely free — no credit card required
+          {t("Signing up is completely free — no credit card required")}
         </TooltipContent>
       </Tooltip>
     </div>

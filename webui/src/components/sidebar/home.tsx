@@ -1,8 +1,10 @@
 import { HomeIcon } from "@/components/icons"
 import { SidebarMenuButton, SidebarMenuItem } from "../ui/sidebar"
 import { useNavigate } from "@tanstack/react-router"
+import { useT } from "@/lib/i18n"
 
 export const HomeMenuItem = () => {
+  const t = useT()
   const navigate = useNavigate()
 
   const handleClick = async () => {
@@ -13,7 +15,7 @@ export const HomeMenuItem = () => {
     <SidebarMenuItem>
       <SidebarMenuButton className="text-xs text-secondary-foreground font-medium transition-all" onClick={handleClick}>
         <HomeIcon className="text-xs shrink-0 text-sidebar-icon-3" strokeWidth={2} />
-        <span>Home</span>
+        <span>{t("Home")}</span>
       </SidebarMenuButton>
     </SidebarMenuItem>
   )
