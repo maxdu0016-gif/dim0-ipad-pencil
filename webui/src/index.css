@@ -30,7 +30,9 @@
 .ios-native #root {
   position: fixed;
   inset: 0;
-  overflow: auto;
+  height: var(--native-viewport-height, 100%);
+  /* Unlike hidden, clip also prevents focus from scrolling this outer box. */
+  overflow: clip;
 }
 .ios-native #root > main,
 .ios-native [data-slot="sidebar-wrapper"] {

@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client"
 import { expect, it, vi } from "vitest"
 import { SpeechInput } from "./speech-input"
 import { useLocaleStore } from "@/lib/i18n"
+import type { BrowserSpeech } from "./browser-speech"
 
 
 vi.mock("@phosphor-icons/react", () => ({ MicrophoneIcon: () => null }))
@@ -43,6 +44,57 @@ it("keeps speech as a draft until confirmation and ignores stale recognition eve
   } finally {
     act(() => root.unmount())
     container.remove()
+    window.webkit = oldWebkit
+    globals.IS_REACT_ACT_ENVIRONMENT = previous
+    useLocaleStore.getState().setLanguage("system")
+  }
+})
+
+
+it("transcribes in browsers and requires confirmation before inserting a draft", () => {
+  const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
+  const previous = globals.IS_REACT_ACT_ENVIRONMENT
+  globals.IS_REACT_ACT_ENVIRONMENT = true
+  const oldWebkit = window.webkit
+  window.webkit = undefined
+  class Recognition implements BrowserSpeech {
+    static current: Recognition
+    lang = ""
+    continuous = false
+    interimResults = false
+    onresult: BrowserSpeech["onresult"] = null
+    onerror: BrowserSpeech["onerror"] = null
+    onend: BrowserSpeech["onend"] = null
+    start = vi.fn()
+    stop = (): void => { this.onend?.() }
+    abort = vi.fn()
+    constructor() { Recognition.current = this }
+  }
+  vi.stubGlobal("SpeechRecognition", Recognition)
+  const container = document.createElement("div")
+  document.body.appendChild(container)
+  const root = createRoot(container)
+  const onConfirm = vi.fn()
+  const click = (label: string): void => {
+    const button = [...document.querySelectorAll("button")].find((el) => el.textContent === label || el.getAttribute("aria-label") === label)!
+    act(() => button.click())
+  }
+  try {
+    useLocaleStore.getState().setLanguage("en")
+    act(() => root.render(<SpeechInput onConfirm={onConfirm} />))
+    click("Speech to text")
+    expect(Recognition.current.lang).toBe("en-US")
+    act(() => Recognition.current.onresult?.({ results: [[{ transcript: "Summarize my notes" }]] }))
+    expect(onConfirm).not.toHaveBeenCalled()
+    click("Stop dictation")
+    click("Insert into message")
+    expect(onConfirm).toHaveBeenCalledExactlyOnceWith("Summarize my notes")
+    act(() => Recognition.current.onresult?.({ results: [[{ transcript: "stale" }]] }))
+    expect(onConfirm).toHaveBeenCalledTimes(1)
+  } finally {
+    act(() => root.unmount())
+    container.remove()
+    vi.unstubAllGlobals()
     window.webkit = oldWebkit
     globals.IS_REACT_ACT_ENVIRONMENT = previous
     useLocaleStore.getState().setLanguage("system")

@@ -1,5 +1,17 @@
 /** English source copy is the stable key; model names and user content are not translated. */
 export const zhCN: Record<string, string> = {
+  "Import document": "导入文档",
+  "Choose document": "选择文档",
+  "PDF, Word (.docx), PowerPoint (.pptx), up to 5 MB. Office text is read on this device; images and charts are not extracted. PDF requires a Mistral key or managed access.": "支持 PDF、Word（.docx）、PowerPoint（.pptx），最大 5 MB。Word 和 PPT 在设备内提取文字，不提取图片和图表；PDF 需要 Mistral 密钥或托管解析服务。",
+  "Choose PDF, DOCX or PPTX. Save older DOC/PPT files as DOCX/PPTX or PDF first.": "请选择 PDF、DOCX 或 PPTX。旧版 DOC/PPT 请先另存为 DOCX/PPTX 或 PDF。",
+  "Document must be under 5 MB.": "文档大小不能超过 5 MB。",
+  "No readable text found in this document. For image-only Office files, export to PDF and use OCR.": "没有找到可读取的文字。如果 Word/PPT 只有图片，请导出为 PDF 后使用 OCR 解析。",
+  "Couldn't read the document.": "无法读取文档。",
+  "Finish the current document import first.": "请先完成当前文档导入。",
+  "Open a local board to import PDF, Word or PowerPoint files.": "请打开本地画板导入 PDF、Word 或 PowerPoint 文件。",
+  "Your device or browser transcribes your speech. Review the draft, insert it, then send it to AI manually.": "由设备或浏览器将语音转成文字。检查并修改草稿，放入输入框后，再手动发送给 AI。",
+  "Speech recognition failed. Check microphone permission and network, then try again.": "语音识别失败，请检查麦克风权限和网络后重试。",
+  "Could not start the microphone.": "无法启动麦克风。",
   "Language": "语言",
   "Search notes…": "搜索笔记…",
   "No notes found.": "未找到笔记。",

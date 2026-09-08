@@ -1,7 +1,7 @@
 {
   "name": "webui",
   "private": true,
-  "version": "0.3.93",
+  "version": "0.3.94",
   "type": "module",
   "scripts": {
     "dev": "dotenv -e ../${npm_config_envfile:-.env} -- vite",
@@ -92,6 +92,7 @@
     "d3-force": "^3.0.0",
     "d3-hierarchy": "^3.1.2",
     "dotenv-cli": "^11.0.0",
+    "fflate": "^0.8.3",
     "hast-util-sanitize": "^5.0.2",
     "html-to-image": "^1.11.11",
     "idb": "^8.0.3",

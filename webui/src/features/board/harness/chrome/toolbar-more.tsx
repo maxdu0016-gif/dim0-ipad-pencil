@@ -99,7 +99,7 @@ const MoreMenuItems = ({
         // dialog explains missing parsing configuration instead of silently disabling.
         onSelect={() => (localUpload ? upload.pick() : setChromeDialog("document-upload"))}
         disabled={localUpload && upload.busy}
-        title={localUpload && !upload.canParse ? t("Sign in or add a Mistral key to upload documents") : undefined}
+        title={t("Import document")}
         className="min-h-11 gap-2 text-sm"
       >
         <DocumentFileIcon className="size-4 shrink-0" />

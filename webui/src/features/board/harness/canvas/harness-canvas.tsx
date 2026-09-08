@@ -63,6 +63,7 @@ import { useCreateHandlers } from "./use-create-handlers"
 import { useTouchShapeEdit } from "./use-touch-shape-edit"
 import { useHandPan } from "./use-hand-pan"
 import { useHarnessDropFiles } from "./use-drop-files"
+import { useLocalDocUpload } from "@/features/agent/local/use-local-doc-upload"
 import { useHydrateIconNodes } from "./use-hydrate-icon-nodes"
 import { usePresentationMode } from "./use-presentation-mode"
 import { useBlockFolderCopy } from "./use-block-folder-copy"
@@ -295,7 +296,8 @@ export function HarnessCanvas({ local = false }: { local?: boolean } = {}) {
       }
     },
   }
-  const { onDragOver, onDrop } = useHarnessDropFiles(wrapRef, store, boardId, rootId, canEdit)
+  const documentUpload = useLocalDocUpload(boardId ?? "")
+  const { onDragOver, onDrop } = useHarnessDropFiles(wrapRef, store, boardId, rootId, canEdit, local && boardId ? documentUpload.importFile : undefined)
   const navigate = useNavigate()
 
   // Double-click dispatch.
@@ -465,6 +467,7 @@ export function HarnessCanvas({ local = false }: { local?: boolean } = {}) {
 
   return (
     <CanvasProvider store={store}>
+      {documentUpload.elements}
       <HarnessWrapRefProvider value={wrapRef}>
         <div
           ref={wrapRef}

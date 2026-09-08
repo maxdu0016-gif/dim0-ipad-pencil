@@ -22,7 +22,7 @@ import { beneathBorderOrigin } from "./beneath-border"
  */
 export const addDocumentNode = (
   store: CanvasStore,
-  opts: { docId: string; title: string; boardId: string; rootId?: string | null },
+  opts: { docId: string; title: string; boardId: string; rootId?: string | null; position?: { x: number; y: number } },
 ): void => {
   const id = asNodeId(opts.docId)
   if (store.getNode(id)) return // already on the canvas (override reuses the id)
@@ -35,7 +35,7 @@ export const addDocumentNode = (
   if (opts.rootId) note.parentId = opts.rootId
 
   const node = noteToNode(note)
-  const at = beneathBorderOrigin(store)
+  const at = opts.position ?? beneathBorderOrigin(store)
   // Non-undoable create (`history` origin): a document owns markdown + chunks in
   // DocRepo, so undoing the upload can't losslessly restore it — keep it off the
   // undo stack, mirroring the durable delete (see DURABLE_DELETE).
