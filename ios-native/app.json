@@ -3,11 +3,11 @@
     "name": "Dim0",
     "slug": "max",
     "owner": "maxdus-team",
-    "version": "1.2.1",
+    "version": "1.2.2",
     "orientation": "default",
     "ios": {
       "bundleIdentifier": "com.dim0.canvas",
-      "buildNumber": "19",
+      "buildNumber": "20",
       "supportsTablet": true,
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
